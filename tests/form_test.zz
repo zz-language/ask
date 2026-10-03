@@ -66,3 +66,54 @@ func test_num_bad_single() {
     assert(form.num_bad(fs, ["bad", "x"], 0))
     assert(form.num_bad(fs, ["5", "x"], 1) == false)
 }
+
+@test
+func test_move_dir_arrows_always() {
+    assert_eq(form.move_dir("text", 1002), -1)
+    assert_eq(form.move_dir("text", 1003), 1)
+    assert_eq(form.move_dir("number", 1002), -1)
+    assert_eq(form.move_dir("number", 1003), 1)
+}
+
+@test
+func test_move_dir_jk_type_on_text() {
+    assert_eq(form.move_dir("text", 107), 0)
+    assert_eq(form.move_dir("text", 106), 0)
+    assert_eq(form.move_dir("password", 107), 0)
+    assert_eq(form.move_dir("number", 106), 0)
+}
+
+@test
+func test_move_dir_jk_navigate_selectable() {
+    assert_eq(form.move_dir("confirm", 107), -1)
+    assert_eq(form.move_dir("confirm", 106), 1)
+    assert_eq(form.move_dir("select", 107), -1)
+    assert_eq(form.move_dir("select", 106), 1)
+}
+
+@test
+func test_move_dir_other_keys_none() {
+    assert_eq(form.move_dir("text", 65), 0)
+    assert_eq(form.move_dir("select", 13), 0)
+}
+
+@test
+func test_cursor_fwd_text() {
+    f := form.field_text("Name", "")
+    assert_eq(form.cursor_fwd("> ", f, "", 0), 8)
+    assert_eq(form.cursor_fwd("> ", f, "ab", 2), 10)
+}
+
+@test
+func test_cursor_fwd_number_suffix() {
+    f := form.field_number("Age", 30, 1, 120)
+    assert_eq(form.cursor_fwd("> ", f, "30", 2), 17)
+}
+
+@test
+func test_cursor_fwd_confirm_select() {
+    c := form.field_confirm("Go?", true)
+    assert_eq(form.cursor_fwd("> ", c, "true", 0), 11)
+    s := form.field_select("Sh", ["bash", "zsh"])
+    assert_eq(form.cursor_fwd("> ", s, "bash", 0), 10)
+}

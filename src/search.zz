@@ -107,8 +107,9 @@ func vis_rows(opts: [str], idx: int) -> [str] {
     out
 }
 
-/// Fuzzy select. Type narrows the list, Up/Down (or k/j) moves, Enter
-/// accepts, Esc cancels (""). Non-TTY falls back to a numbered pick.
+/// Fuzzy select. Type narrows the list (every printable byte, `j`
+/// and `k` included), Up/Down moves, Enter accepts, Esc cancels ("").
+/// Non-TTY falls back to a numbered pick.
 pub func search(msg: str, options: [str]) -> str {
     n := vec.len(options)
     if n == 0 {
@@ -138,14 +139,14 @@ pub func search(msg: str, options: [str]) -> str {
             ansi.wipe_down()
             ansi.answer(msg, "(cancelled)")
             return ""
-        } else if k == keys.KEY_UP || k == 107 {
+        } else if k == keys.KEY_UP {
             if vec.len(hits) > 0 {
                 idx = (idx + vec.len(hits) - 1) % vec.len(hits)
                 rows = vis_rows(hits, idx)
                 ansi.wipe_down()
                 draw(msg, q, rows)
             }
-        } else if k == keys.KEY_DOWN || k == 106 {
+        } else if k == keys.KEY_DOWN {
             if vec.len(hits) > 0 {
                 idx = (idx + 1) % vec.len(hits)
                 rows = vis_rows(hits, idx)

@@ -126,17 +126,18 @@ pub func field_number(msg: str, default: int, lo: int, hi: int) -> fm.Field {
     fm.field_number(msg, default, lo, hi)
 }
 
-/// Multi-field form: Up/Down (or k/j) moves, typing edits text rows,
-/// Enter toggles confirm / advances, Left/Right cycles select,
-/// Tab advances, Enter on the last row or Ctrl+D submits, Esc
-/// cancels ([]). Answers come back as strings in field order
-/// (confirm yields "true"/"false").
+/// Multi-field form: arrows move freely, typing edits text rows
+/// (`j`/`k` type on text, move on confirm/select), Enter toggles
+/// confirm / advances, Left/Right cycles select, Tab advances,
+/// invalid numbers block only submit (bell + jump), Enter on the
+/// last row or Ctrl+D submits, Esc cancels ([]). Answers come back
+/// as strings in field order (confirm yields "true"/"false").
 pub func form(title: str, fields: [fm.Field]) -> [str] {
     fm.run(title, fields)
 }
 
-/// Fuzzy-filter select: type narrows the list, Up/Down (or k/j)
-/// moves, Enter accepts, Esc cancels ("").
+/// Fuzzy-filter select: type narrows the list (all keys type),
+/// Up/Down moves, Enter accepts, Esc cancels ("").
 pub func search(msg: str, options: [str]) -> str {
     sch.search(msg, options)
 }
