@@ -180,8 +180,11 @@ func ring() {
     ansi.bell()
 }
 
-func wipe_h(h: int) {
-    ansi.wipe(h)
+/// Climb back to the form header and erase below (the cursor rests
+/// mid-block, so an upward wipe from here would eat scrollback).
+func rewind(prev: int) {
+    ansi.up_lines(prev)
+    ansi.wipe_down()
 }
 
 /// Multi-field form. Returns answers as strings in field order
@@ -217,9 +220,9 @@ pub func run(title: str, fields: [Field]) -> [str] {
         i = i + 1
     }
     idx := 0
-    h := n + 2
     stop := false
     cancelled := false
+    prev := 1
     while stop == false {
         rows: [str] = []
         fwd := 0
@@ -253,6 +256,7 @@ pub func run(title: str, fields: [Field]) -> [str] {
             j = j + 1
         }
         draw(title, rows, idx, fwd)
+        prev = 1 + idx
         k := keys.next()
         f := fields[idx]
         if k == keys.KEY_EOF || k == 4 {
@@ -380,11 +384,11 @@ pub func run(title: str, fields: [Field]) -> [str] {
             }
         }
         if stop == false {
-            wipe_h(h)
+            rewind(prev)
         }
     }
     ansi.restore()
-    wipe_h(h)
+    rewind(prev)
     if cancelled {
         ansi.answer(title, "(cancelled)")
         return []

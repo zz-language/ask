@@ -43,7 +43,7 @@ func main() {
     // 12. Ocean theme for one screen.
     ask.set_theme("ocean")
     // 13. Multi-field form (piped: sequential prompts).
-    who := ask.form("Who:", [ask.field_text("Name:", "ada"), ask.field_number("Age:", 30, 1, 120), ask.field_confirm("Admin?", false), ask.field_select("Shell:", ["bash", "zsh"])])
+    who := ask.form("Who:", [ask.field_text("Name", "ada"), ask.field_number("Age", 30, 1, 120), ask.field_confirm("Admin?", false), ask.field_select("Shell", ["bash", "zsh"])])
     println("who: {who}")
     ask.set_theme("default")
     println("demo_ok")
