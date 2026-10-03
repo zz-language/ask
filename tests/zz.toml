@@ -40,3 +40,9 @@ path = "../src"
 
 [dependencies.theme]
 path = "../src"
+
+[dependencies.date]
+path = "../src"
+
+[dependencies.browse]
+path = "../src"

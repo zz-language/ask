@@ -161,3 +161,26 @@ pub func text_path(msg: str, default: str) -> str {
     ansi.answer(msg, val)
     val
 }
+
+/// Type-twice secret: prompts again and requires an exact match,
+/// looping with a red hint until both entries agree. Never echoes.
+pub func password2(msg: str) -> str {
+    password2_mask(msg, "*")
+}
+
+/// Type-twice secret with a custom mask character.
+pub func password2_mask(msg: str, mask: str) -> str {
+    first := password(msg + ":", mask)
+    again := true
+    out := first
+    while again {
+        second := password("Again:", mask)
+        if second == first {
+            out = second
+            again = false
+        } else {
+            println("Mismatch, try again.")
+        }
+    }
+    out
+}

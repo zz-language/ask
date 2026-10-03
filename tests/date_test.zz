@@ -1,0 +1,94 @@
+// date_test.zz — unit tests for civil date math and validation.
+//
+// All pure (no TTY): epoch round-trips, leap rules, weekday anchor,
+// parsing, and the fallback validator.
+import date
+
+@test
+func test_epoch_anchor() {
+    assert_eq(date.ymd_to_days(1970, 1, 1), 0)
+    got := date.days_to_ymd(0)
+    assert_eq(got[0], 1970)
+    assert_eq(got[1], 1)
+    assert_eq(got[2], 1)
+}
+
+@test
+func test_known_dates() {
+    assert_eq(date.ymd_to_days(2000, 1, 1), 10957)
+    got := date.days_to_ymd(20346)
+    assert_eq(got[0], 2025)
+    assert_eq(got[1], 9)
+    assert_eq(got[2], 15)
+}
+
+@test
+func test_roundtrip() {
+    for v in [[2026, 10, 4], [2024, 2, 29], [1999, 12, 31], [2030, 6, 15]] {
+        back := date.days_to_ymd(date.ymd_to_days(v[0], v[1], v[2]))
+        assert_eq(back[0], v[0])
+        assert_eq(back[1], v[1])
+        assert_eq(back[2], v[2])
+    }
+}
+
+@test
+func test_leap_rules() {
+    assert(date.is_leap(2024))
+    assert(date.is_leap(2000))
+    assert(date.is_leap(1900) == false)
+    assert(date.is_leap(2025) == false)
+    assert_eq(date.month_len(2024, 2), 29)
+    assert_eq(date.month_len(2025, 2), 28)
+    assert_eq(date.month_len(2026, 4), 30)
+    assert_eq(date.month_len(2026, 1), 31)
+}
+
+@test
+func test_weekday_anchor() {
+    assert_eq(date.dow_sun0(0), 4)
+    assert_eq(date.dow_sun0(date.ymd_to_days(2026, 10, 4)), 0)
+    assert_eq(date.dow_sun0(date.ymd_to_days(2026, 10, 5)), 1)
+}
+
+@test
+func test_iso_format() {
+    assert_eq(date.iso(date.ymd_to_days(2026, 1, 5)), "2026-01-05")
+    assert_eq(date.pad2(3), "03")
+    assert_eq(date.pad2(12), "12")
+}
+
+@test
+func test_parse_date() {
+    got := date.parse_date("2026-10-04")
+    assert_eq(got[0], 2026)
+    assert_eq(got[1], 10)
+    assert_eq(got[2], 4)
+    assert_eq(len(date.parse_date("nope")), 0)
+    assert_eq(len(date.parse_date("2026-13-01")), 0)
+    assert_eq(len(date.parse_date("2025-02-29")), 0)
+    leap := date.parse_date("2024-02-29")
+    assert_eq(leap[0], 2024)
+    assert_eq(leap[1], 2)
+    assert_eq(leap[2], 29)
+}
+
+@test
+func test_valid_date() {
+    assert(date.valid_date("2026-10-04"))
+    assert(date.valid_date("bad") == false)
+}
+
+@test
+func test_month_names() {
+    assert_eq(date.month_name(1), "January")
+    assert_eq(date.month_name(12), "December")
+    assert_eq(date.month_name(0), "?")
+}
+
+@test
+func test_shift_month() {
+    assert_eq(date.iso(date.shift_month(date.ymd_to_days(2026, 1, 31), 1)), "2026-02-28")
+    assert_eq(date.iso(date.shift_month(date.ymd_to_days(2026, 12, 15), 1)), "2027-01-15")
+    assert_eq(date.iso(date.shift_month(date.ymd_to_days(2026, 3, 10), -1)), "2026-02-10")
+}

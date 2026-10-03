@@ -1,0 +1,36 @@
+// browse_test.zz — unit tests for path helpers (pure, no TTY).
+//
+// `browse()` itself drives the screen, so only the helpers are pinned
+// here; navigation is verified through manual TTY runs.
+import browse
+
+@test
+func test_clean_dir() {
+    assert_eq(browse.clean_dir("/"), "/")
+    assert_eq(browse.clean_dir("/a/b/"), "/a/b")
+    assert_eq(browse.clean_dir("rel/"), "rel")
+    assert_eq(browse.clean_dir("rel"), "rel")
+}
+
+@test
+func test_parent_dir() {
+    assert_eq(browse.parent_dir("/a/b"), "/a")
+    assert_eq(browse.parent_dir("/a"), "/")
+    assert_eq(browse.parent_dir("/"), "/")
+    assert_eq(browse.parent_dir("rel"), ".")
+}
+
+@test
+func test_join_paths() {
+    assert_eq(browse.join("/", "x"), "/x")
+    assert_eq(browse.join(".", "x"), "x")
+    assert_eq(browse.join("/a", "x"), "/a/x")
+}
+
+@test
+func test_visible_hides_dots() {
+    got := browse.visible(["a", ".git", "b", "."])
+    assert_eq(len(got), 2)
+    assert_eq(got[0], "a")
+    assert_eq(got[1], "b")
+}

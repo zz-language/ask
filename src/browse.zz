@@ -1,0 +1,264 @@
+// browse.zz — navigable file picker: arrows move, Enter descends
+// into directories and accepts files, Backspace goes up, Ctrl+D
+// accepts the current directory, q/Esc cancels ("").
+//
+// Dotfiles are hidden. Layout mirrors `select` (header + rows, cursor
+// below the block, upward wipe) with a capped window + overflow row,
+// so `total` always matches what was printed.
+import std.fs
+import std.process
+import std.str
+import std.term
+import std.vec
+import ansi
+import fallback
+import keys
+import theme
+
+/// Max entries shown under the header.
+pub const BROWSE_ROWS: int = 10
+
+/// Strip one trailing slash (except the root). Pure.
+pub func clean_dir(s: str) -> str {
+    if s == "/" {
+        return s
+    }
+    if s != "" && s[len(s) - 1] == "/" {
+        return s[:len(s) - 1]
+    }
+    s
+}
+
+/// Parent directory ("/" stays "/"). Pure.
+pub func parent_dir(s: str) -> str {
+    d := clean_dir(s)
+    if d == "/" || d == "." || d == "" {
+        return "/"
+    }
+    parts := str.split(d, "/")
+    if vec.len(parts) <= 1 {
+        return "."
+    }
+    head := parts[:vec.len(parts) - 1]
+    out := vec.join(head, "/")
+    if out == "" {
+        return "/"
+    }
+    out
+}
+
+/// Visible entries: dotfiles hidden, directories first with trailing
+/// slashes (pure over a (name, is_dir) listing is done by callers —
+/// here we just filter + tag from a names list is impossible without
+/// I/O, so this filters names only).
+pub func visible(names: [str]) -> [str] {
+    out: [str] = []
+    for n in names {
+        if n != "" && n[0] != "." {
+            out = vec.push(out, n)
+        }
+    }
+    out
+}
+
+/// Join a name onto a directory without doubling the root slash.
+pub func join(dir: str, name: str) -> str {
+    if dir == "/" {
+        return "/" + name
+    }
+    if dir == "." || dir == "" {
+        return name
+    }
+    dir + "/" + name
+}
+
+/// Restore the terminal and terminate with code 130 (Ctrl+C).
+func die() -> str {
+    ansi.restore()
+    process.exit(130)
+    ""
+}
+
+/// True when stdin can do raw interactive picking.
+func live() -> bool {
+    if term.is_tty() == false {
+        return false
+    }
+    match term.enable_raw() {
+        .ok(_) => true
+        .err(_) => false
+    }
+}
+
+/// One entry row: marker + accented label on the highlight,
+// directories suffixed and brightened.
+func erow(dir: str, name: str, active: bool) -> str {
+    t := theme.current()
+    label := name
+    if fs.is_dir(join(dir, name)) {
+        label = theme.paint(t, "blue", name + "/")
+    }
+    if active {
+        return t.marker + theme.paint(t, "bold", theme.paint(t, t.accent, label))
+    }
+    "  " + label
+}
+
+/// Read, filter, and sort-display entries for `dir`.
+/// Directories first, then files, each alphabetical (read_dir sorts).
+func entries(dir: str) -> [str] {
+    names: [str] = []
+    match fs.read_dir(dir) {
+        .ok(ns) => {
+            names = visible(ns)
+        }
+        .err(_) => {
+            names = []
+        }
+    }
+    dirs: [str] = []
+    files: [str] = []
+    for n in names {
+        if fs.is_dir(join(dir, n)) {
+            dirs = vec.push(dirs, n)
+        } else {
+            files = vec.push(files, n)
+        }
+    }
+    out := dirs
+    for f in files {
+        out = vec.push(out, f)
+    }
+    out
+}
+
+/// Visible rows with `idx` highlighted (capped + overflow).
+func vis_rows(dir: str, opts: [str], idx: int) -> [str] {
+    shown := opts
+    if vec.len(opts) > BROWSE_ROWS {
+        shown = opts[:BROWSE_ROWS]
+    }
+    out: [str] = []
+    i := 0
+    for o in shown {
+        if i == idx {
+            out = vec.push(out, erow(dir, o, true))
+        } else {
+            out = vec.push(out, erow(dir, o, false))
+        }
+        i = i + 1
+    }
+    if vec.len(opts) > BROWSE_ROWS {
+        out = vec.push(out, "  ...{vec.len(opts) - BROWSE_ROWS} more")
+    }
+    out
+}
+
+/// Print the header plus rows (cursor ends below).
+func draw(dir: str, rows: [str]) {
+    t := theme.current()
+    print(theme.headline(t, dir + "/") + "\r\n")
+    for r in rows {
+        print(r + "\r\n")
+    }
+    term.flush()
+}
+
+/// File picker. Enter descends into directories and accepts files
+/// (full path), Backspace/Left goes up, Right descends, Ctrl+D
+/// accepts the current directory, q/Esc cancels ("").
+pub func browse(start: str) -> str {
+    dir := clean_dir(start)
+    if dir == "" {
+        dir = "."
+    }
+    if live() == false {
+        return fallback.line("Path:", dir)
+    }
+    ansi.hide()
+    opts := entries(dir)
+    idx := 0
+    rows := vis_rows(dir, opts, idx)
+    draw(dir, rows)
+    total := 1 + vec.len(rows)
+    stop := false
+    cancelled := false
+    picked := ""
+    while stop == false {
+        k := keys.next()
+        if k == keys.KEY_EOF {
+            stop = true
+        } else if k == keys.KEY_CTRL_C {
+            return die()
+        } else if k == keys.KEY_ENTER {
+            if vec.len(opts) == 0 {
+                stop = true
+            } else if fs.is_dir(join(dir, opts[idx])) {
+                dir = join(dir, opts[idx])
+                opts = entries(dir)
+                idx = 0
+                rows = vis_rows(dir, opts, idx)
+                ansi.wipe(total)
+                total = 1 + vec.len(rows)
+                draw(dir, rows)
+            } else {
+                picked = join(dir, opts[idx])
+                stop = true
+            }
+        } else if k == keys.KEY_ESC || k == 113 || k == 81 {
+            cancelled = true
+            stop = true
+        } else if k == keys.KEY_UP {
+            if vec.len(opts) > 0 {
+                idx = (idx + vec.len(opts) - 1) % vec.len(opts)
+                rows = vis_rows(dir, opts, idx)
+                ansi.wipe(total)
+                total = 1 + vec.len(rows)
+                draw(dir, rows)
+            }
+        } else if k == keys.KEY_DOWN {
+            if vec.len(opts) > 0 {
+                idx = (idx + 1) % vec.len(opts)
+                rows = vis_rows(dir, opts, idx)
+                ansi.wipe(total)
+                total = 1 + vec.len(rows)
+                draw(dir, rows)
+            }
+        } else if k == keys.KEY_BACKSPACE || k == 8 || k == keys.KEY_LEFT {
+            dir = parent_dir(dir)
+            opts = entries(dir)
+            idx = 0
+            rows = vis_rows(dir, opts, idx)
+            ansi.wipe(total)
+            total = 1 + vec.len(rows)
+            draw(dir, rows)
+        } else if k == keys.KEY_RIGHT {
+            if vec.len(opts) > 0 && fs.is_dir(join(dir, opts[idx])) {
+                dir = join(dir, opts[idx])
+                opts = entries(dir)
+                idx = 0
+                rows = vis_rows(dir, opts, idx)
+                ansi.wipe(total)
+                total = 1 + vec.len(rows)
+                draw(dir, rows)
+            }
+        } else if k == 4 {
+            picked = dir
+            stop = true
+        }
+    }
+    ansi.restore()
+    ansi.wipe(total)
+    if cancelled {
+        ansi.answer(dir + "/", "(cancelled)")
+        return ""
+    }
+    if picked == "" && vec.len(opts) > 0 {
+        picked = join(dir, opts[idx])
+    }
+    if picked == "" {
+        picked = dir
+    }
+    ansi.answer(dir + "/", picked)
+    picked
+}

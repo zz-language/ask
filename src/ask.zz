@@ -23,6 +23,8 @@ import number as num
 import search as sch
 import select as sel
 import area as ar
+import browse as br
+import date as dt
 import theme
 
 /// Text input with real-time line editing (arrows, Home/End,
@@ -40,6 +42,29 @@ pub func text_msg(msg: str, default: str, validator: func(str) -> bool, err_msg:
 /// Masked input: typed characters echo as `*`. Enter accepts.
 pub func password(msg: str) -> str {
     line.password(msg, "*")
+}
+
+/// Type-twice secret: prompts again, requires an exact match.
+pub func password2(msg: str) -> str {
+    line.password2(msg)
+}
+
+/// Type-twice secret with a custom mask character.
+pub func password2_mask(msg: str, mask: str) -> str {
+    line.password2_mask(msg, mask)
+}
+
+/// File browser: arrows move, Enter descends/accepts, Backspace goes
+/// up, Ctrl+D accepts the directory, q/Esc cancels (""). Dotfiles
+/// hidden. Returns the picked path.
+pub func browse(start: str) -> str {
+    br.browse(start)
+}
+
+/// Calendar picker: arrows move days/weeks, [/] or PgUp/PgDn change
+/// months, Enter accepts "YYYY-MM-DD", Esc cancels ("").
+pub func date(msg: str, default: str) -> str {
+    dt.date(msg, default)
 }
 
 /// Masked input with a custom mask character.

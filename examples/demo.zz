@@ -46,5 +46,14 @@ func main() {
     who := ask.form("Who:", [ask.field_text("Name", "ada"), ask.field_number("Age", 30, 1, 120), ask.field_confirm("Admin?", false), ask.field_select("Shell", ["bash", "zsh"])])
     println("who: {who}")
     ask.set_theme("default")
+    // 14. Type-twice secret.
+    pw2 := ask.password2("New PIN:")
+    println("pin length: {len(pw2)}")
+    // 15. Calendar picker (piped: validated YYYY-MM-DD line).
+    day := ask.date("Release:", "2026-10-04")
+    println("day: {day}")
+    // 16. File browser (piped: plain path line).
+    src := ask.browse("./")
+    println("src: {src}")
     println("demo_ok")
 }
