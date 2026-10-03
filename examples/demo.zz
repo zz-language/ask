@@ -31,5 +31,14 @@ func main() {
     // 8. Fuzzy search (type narrows, arrows move, Enter picks).
     shell := ask.search("Shell:", ["bash", "zsh", "fish", "powershell", "nu"])
     println("shell: {shell}")
+    // 9. Destructive confirm (must type the word exactly).
+    gone := ask.confirm_delete("Nuke ./build?")
+    println("gone: {gone}")
+    // 10. Multi-line area (Ctrl+D accepts; piped: empty line ends).
+    bio := ask.area("Bio:", "hi", 4)
+    println("bio: {bio}")
+    // 11. External editor (piped: lines until empty).
+    notes := ask.editor("Notes:", "draft")
+    println("notes: {notes}")
     println("demo_ok")
 }

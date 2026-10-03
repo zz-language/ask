@@ -1,0 +1,360 @@
+// area.zz — multi-line text area with scrolling and soft wrapping.
+//
+// Document model: lines plus a (line, column) cursor, all edits pure
+// and unit-tested. Rendering wraps each line at the terminal width
+// (`wrap_chunks`, pure), shows a `rows`-tall window following the
+// cursor, and parks the cursor with up/forward moves like `search`.
+// Enter splits lines, Tab inserts two spaces, Ctrl+D (or EOF) accepts,
+// Esc cancels with "", Ctrl+C exits(130).
+import std.process
+import std.str
+import std.term
+import std.vec
+import ansi
+import fallback
+import keys
+import line
+
+pub struct Doc {
+    lines: [str],
+    li: int,
+    col: int,
+}
+
+/// Document pre-filled with `default` (split on newlines), cursor parked
+/// at the very end. Empty defaults yield one empty line.
+pub func doc_new(default: str) -> Doc {
+    ls := str.split(default, "\n")
+    if vec.len(ls) == 0 {
+        ls = [""]
+    }
+    last := ls[vec.len(ls) - 1]
+    Doc{ lines: ls, li: vec.len(ls) - 1, col: len(last) }
+}
+
+/// Display rows a line occupies at width `w` (pure, min 1).
+pub func disp_height(s: str, w: int) -> int {
+    h := (len(s) + w - 1) / w
+    if h < 1 {
+        h = 1
+    }
+    h
+}
+
+/// Wrap every line at `w` into display rows (pure, order-preserving).
+pub func wrap_chunks(lines: [str], w: int) -> [str] {
+    out: [str] = []
+    for s in lines {
+        if s == "" {
+            out = vec.push(out, "")
+        } else {
+            start := 0
+            while start < len(s) {
+                end := start + w
+                if end > len(s) {
+                    end = len(s)
+                }
+                out = vec.push(out, s[start:end])
+                start = end
+            }
+        }
+    }
+    out
+}
+
+/// Absolute (display-row, col) of a (line, col) cursor at width `w`.
+pub func cursor_at(lines: [str], li: int, col: int, w: int) -> [int] {
+    row := 0
+    i := 0
+    while i < li {
+        row = row + disp_height(lines[i], w)
+        i = i + 1
+    }
+    [row + col / w, col % w]
+}
+
+impl Doc {
+    /// Plain contents joined with newlines.
+    pub func text(self) -> str {
+        vec.join(self.lines, "\n")
+    }
+
+    /// Insert `ch` at the cursor.
+    pub func insert(self, ch: str) -> Doc {
+        l := self.lines[self.li]
+        nl := l[:self.col] + ch + l[self.col:]
+        ls := self.lines
+        ls[self.li] = nl
+        Doc{ lines: ls, li: self.li, col: self.col + 1 }
+    }
+
+    /// Backspace: erase left, or join with the previous line at col 0.
+    pub func backspace(self) -> Doc {
+        if self.col > 0 {
+            l := self.lines[self.li]
+            nl := l[:self.col - 1] + l[self.col:]
+            ls := self.lines
+            ls[self.li] = nl
+            return Doc{ lines: ls, li: self.li, col: self.col - 1 }
+        }
+        if self.li == 0 {
+            return self
+        }
+        prev := self.lines[self.li - 1]
+        cur := self.lines[self.li]
+        ls: [str] = []
+        i := 0
+        for l in self.lines {
+            if i == self.li - 1 {
+                ls = vec.push(ls, prev + cur)
+            } else if i == self.li {
+                i = i + 1
+                continue
+            } else {
+                ls = vec.push(ls, l)
+            }
+            i = i + 1
+        }
+        Doc{ lines: ls, li: self.li - 1, col: len(prev) }
+    }
+
+    /// Delete under the cursor, joining the next line at end of line.
+    pub func delete_at(self) -> Doc {
+        l := self.lines[self.li]
+        if self.col < len(l) {
+            ls := self.lines
+            ls[self.li] = l[:self.col] + l[self.col + 1:]
+            return Doc{ lines: ls, li: self.li, col: self.col }
+        }
+        if self.li + 1 >= vec.len(self.lines) {
+            return self
+        }
+        ls: [str] = []
+        i := 0
+        for x in self.lines {
+            if i == self.li {
+                ls = vec.push(ls, x + self.lines[i + 1])
+            } else if i == self.li + 1 {
+                i = i + 1
+                continue
+            } else {
+                ls = vec.push(ls, x)
+            }
+            i = i + 1
+        }
+        Doc{ lines: ls, li: self.li, col: self.col }
+    }
+
+    /// Step left, crossing to the previous line end at col 0.
+    pub func left(self) -> Doc {
+        if self.col > 0 {
+            return Doc{ lines: self.lines, li: self.li, col: self.col - 1 }
+        }
+        if self.li == 0 {
+            return self
+        }
+        Doc{ lines: self.lines, li: self.li - 1, col: len(self.lines[self.li - 1]) }
+    }
+
+    /// Step right, crossing to the next line start at end of line.
+    pub func right(self) -> Doc {
+        if self.col < len(self.lines[self.li]) {
+            return Doc{ lines: self.lines, li: self.li, col: self.col + 1 }
+        }
+        if self.li + 1 >= vec.len(self.lines) {
+            return self
+        }
+        Doc{ lines: self.lines, li: self.li + 1, col: 0 }
+    }
+
+    /// Move up, clamping the column to the shorter line.
+    pub func up(self) -> Doc {
+        if self.li == 0 {
+            return self
+        }
+        c := self.col
+        top := len(self.lines[self.li - 1])
+        if c > top {
+            c = top
+        }
+        Doc{ lines: self.lines, li: self.li - 1, col: c }
+    }
+
+    /// Move down, clamping the column to the shorter line.
+    pub func down(self) -> Doc {
+        if self.li + 1 >= vec.len(self.lines) {
+            return self
+        }
+        c := self.col
+        below := len(self.lines[self.li + 1])
+        if c > below {
+            c = below
+        }
+        Doc{ lines: self.lines, li: self.li + 1, col: c }
+    }
+
+    /// Jump to the start of the current line.
+    pub func home(self) -> Doc {
+        Doc{ lines: self.lines, li: self.li, col: 0 }
+    }
+
+    /// Jump to the end of the current line.
+    pub func end(self) -> Doc {
+        Doc{ lines: self.lines, li: self.li, col: len(self.lines[self.li]) }
+    }
+
+    /// Split the current line at the cursor (Enter).
+    pub func split_line(self) -> Doc {
+        l := self.lines[self.li]
+        left := l[:self.col]
+        right := l[self.col:]
+        ls: [str] = []
+        i := 0
+        for x in self.lines {
+            if i == self.li {
+                ls = vec.push(ls, left)
+                ls = vec.push(ls, right)
+            } else {
+                ls = vec.push(ls, x)
+            }
+            i = i + 1
+        }
+        Doc{ lines: ls, li: self.li + 1, col: 0 }
+    }
+}
+
+/// Restore the terminal and terminate with code 130 (Ctrl+C).
+func die() -> str {
+    ansi.restore()
+    process.exit(130)
+    ""
+}
+
+/// True when stdin can do raw interactive editing.
+func live() -> bool {
+    if term.is_tty() == false {
+        return false
+    }
+    match term.enable_raw() {
+        .ok(_) => true
+        .err(_) => false
+    }
+}
+
+/// Usable terminal width (floor 20, fallback 80).
+func width() -> int {
+    match term.get_size() {
+        .ok(sz) => {
+            if sz[0] >= 20 {
+                return sz[0]
+            }
+            return 80
+        }
+        .err(_) => 80
+    }
+}
+
+/// Print the header plus the visible window, then park the cursor.
+/// `total` counts every display row including the header.
+func draw(msg: str, chunks: [str], off: int, total: int, crow: int, ccol: int, w: int) {
+    h := "? {msg} (^D done, esc cancels)"
+    if len(h) > w {
+        h = h[:w]
+    }
+    print(h + "\r\n")
+    i := off
+    shown := 0
+    while i < vec.len(chunks) && shown < total - 1 {
+        print(chunks[i] + "\r\n")
+        i = i + 1
+        shown = shown + 1
+    }
+    up := shown - (crow - off)
+    if up > 0 {
+        print("\x1b[{up}A")
+    }
+    print("\r\x1b[{ccol}C")
+    term.flush()
+}
+
+/// Multi-line text area: arrows move (Home/End per line), Enter splits,
+/// Tab indents two spaces, Backspace/Delete join lines, Ctrl+D accepts,
+/// Esc cancels (""). Shows a scrolling `rows`-tall window with soft
+/// wrapping. Returns the joined text.
+pub func area(msg: str, default: str, rows: int) -> str {
+    if live() == false {
+        return fallback.edit_lines(msg, default)
+    }
+    win := rows
+    if win < 2 {
+        win = 5
+    }
+    w := width()
+    ansi.hide()
+    d := doc_new(default)
+    chunks := wrap_chunks(d.lines, w)
+    pos := cursor_at(d.lines, d.li, d.col, w)
+    off := pos[0] - win + 1
+    if off < 0 {
+        off = 0
+    }
+    total := 1 + vec.len(chunks)
+    draw(msg, chunks, off, total, pos[0], pos[1], w)
+    stop := false
+    cancelled := false
+    while stop == false {
+        k := keys.next()
+        if k == keys.KEY_EOF || k == 4 {
+            stop = true
+        } else if k == keys.KEY_CTRL_C {
+            return die()
+        } else if k == keys.KEY_ESC {
+            cancelled = true
+            stop = true
+        } else if k == keys.KEY_LEFT {
+            d = d.left()
+        } else if k == keys.KEY_RIGHT {
+            d = d.right()
+        } else if k == keys.KEY_UP {
+            d = d.up()
+        } else if k == keys.KEY_DOWN {
+            d = d.down()
+        } else if k == keys.KEY_HOME {
+            d = d.home()
+        } else if k == keys.KEY_END {
+            d = d.end()
+        } else if k == keys.KEY_ENTER {
+            d = d.split_line()
+        } else if k == keys.KEY_TAB {
+            d = d.insert("  ")
+        } else if k == keys.KEY_BACKSPACE || k == 8 {
+            d = d.backspace()
+        } else if k == keys.KEY_DELETE {
+            d = d.delete_at()
+        } else if k >= 32 && k <= 126 {
+            d = d.insert(line.glyph(k))
+        } else {
+            continue
+        }
+        chunks = wrap_chunks(d.lines, w)
+        pos = cursor_at(d.lines, d.li, d.col, w)
+        if pos[0] < off {
+            off = pos[0]
+        }
+        if pos[0] >= off + win {
+            off = pos[0] - win + 1
+        }
+        ansi.wipe(total)
+        total = 1 + vec.len(chunks)
+        draw(msg, chunks, off, total, pos[0], pos[1], w)
+    }
+    ansi.restore()
+    ansi.wipe(total)
+    if cancelled {
+        ansi.answer(msg, "(cancelled)")
+        return ""
+    }
+    n := vec.len(d.lines)
+    ansi.answer(msg, "({n} lines)")
+    d.text()
+}

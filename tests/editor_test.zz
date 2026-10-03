@@ -1,0 +1,23 @@
+// editor_test.zz — unit tests for editor helpers (pure, no TTY).
+//
+// `editor()` itself launches an interactive child process, so it is
+// verified through `examples/demo.zz` (piped fallback) and manual TTY
+// runs instead.
+import editor
+
+@test
+func test_chomp_newline() {
+    assert_eq(editor.chomp("a\n"), "a")
+}
+
+@test
+func test_chomp_crlf() {
+    assert_eq(editor.chomp("a\r\n"), "a")
+}
+
+@test
+func test_chomp_keeps_clean() {
+    assert_eq(editor.chomp("a"), "a")
+    assert_eq(editor.chomp(""), "")
+    assert_eq(editor.chomp("a\n\n"), "a\n")
+}

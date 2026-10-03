@@ -1,0 +1,87 @@
+// editor.zz — external-editor input: dump a default to a tempfile,
+// open $EDITOR on it, read back the result.
+//
+// Interactive editors inherit stdio through `process.run`, so this
+// needs a real terminal; piped stdin falls back to `edit_lines`
+// (lone `.` or empty line ends). The tempfile is always removed.
+import std.env
+import std.fs
+import std.process
+import std.str
+import std.term
+import std.uuid
+import std.vec
+import ansi
+import fallback
+
+/// Strip one trailing newline pair editors append on save (pure).
+pub func chomp(s: str) -> str {
+    out := s
+    if out != "" && out[len(out) - 1] == "\n" {
+        out = out[:len(out) - 1]
+    }
+    if out != "" && out[len(out) - 1] == "\r" {
+        out = out[:len(out) - 1]
+    }
+    out
+}
+
+/// Editor binary: VISUAL, then EDITOR, then "vi" (pure).
+pub func editor_bin() -> str {
+    vis := env.get("VISUAL") ?? ""
+    if vis != "" {
+        return vis
+    }
+    ed := env.get("EDITOR") ?? ""
+    if ed != "" {
+        return ed
+    }
+    "vi"
+}
+
+/// Run the editor on `path`: true when it exits zero.
+pub func edit_file(path: str, bin: str) -> bool {
+    match process.run(bin, [path]) {
+        .ok(t) => t[0] == 0
+        .err(_) => false
+    }
+}
+
+/// Open the editor with `default` pre-filled (`.txt` scratch file).
+/// Aborted/failed edits keep `default`.
+pub func editor(msg: str, default: str) -> str {
+    editor_ext(msg, default, "txt")
+}
+
+/// Open the editor with a custom scratch extension (`"md"` gives the
+/// user syntax highlighting for markdown).
+pub func editor_ext(msg: str, default: str, ext: str) -> str {
+    if term.is_tty() == false {
+        return fallback.edit_lines(msg, default)
+    }
+    bin := editor_bin()
+    println("? {msg} (opening {bin}...)")
+    path := env.temp_dir() + "/ask-" + uuid.v7() + "." + ext
+    match fs.write_file(path, default) {
+        .ok(_) => 0
+        .err(_) => {
+            return default
+        }
+    }
+    ok := edit_file(path, bin)
+    content := default
+    readback := match fs.read_file(path) {
+        .ok(c) => c
+        .err(_) => default
+    }
+    if ok {
+        content = chomp(readback)
+    }
+    match fs.remove_file(path) {
+        .ok(_) => 0
+        .err(_) => 0
+    }
+    n := vec.len(str.split(content, "\n"))
+    ansi.answer(msg, "(edited, {n} lines)")
+    content
+}

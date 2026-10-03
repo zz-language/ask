@@ -16,10 +16,12 @@
 // Piped stdin (no TTY) degrades to plain `input()` automatically, so
 // scripts and `zz test` keep working without a terminal.
 import confirm as cf
+import editor as ed
 import line
 import number as num
 import search as sch
 import select as sel
+import area as ar
 
 /// Text input with real-time line editing (arrows, Home/End,
 // Backspace/Delete, bar cursor). Retries until `validator` passes;
@@ -53,6 +55,37 @@ pub func text_path(msg: str, default: str) -> str {
 /// answers re-ask with a red hint. Returns the accepted number.
 pub func number(msg: str, default: int, lo: int, hi: int) -> int {
     num.number(msg, default, lo, hi)
+}
+
+/// Open `$EDITOR` (VISUAL, EDITOR, else vi) on a tempfile pre-filled
+/// with `default`; returns the saved contents. Aborted edits keep
+/// the default. Piped stdin reads lines until an empty line.
+pub func editor(msg: str, default: str) -> str {
+    ed.editor(msg, default)
+}
+
+/// Editor input with a custom scratch extension (`"md"` highlights
+/// markdown in the editor).
+pub func editor_ext(msg: str, default: str, ext: str) -> str {
+    ed.editor_ext(msg, default, ext)
+}
+
+/// Destructive confirmation: the user must type `word` exactly —
+/// anything else aborts with false.
+pub func confirm_danger(msg: str, word: str) -> bool {
+    cf.confirm_danger(msg, word)
+}
+
+/// Destructive confirmation for the common `DELETE` word.
+pub func confirm_delete(msg: str) -> bool {
+    cf.confirm_delete(msg)
+}
+
+/// Multi-line text area: arrows move, Enter splits lines, Tab
+/// indents, Ctrl+D accepts, Esc cancels (""). Shows a scrolling
+/// `rows`-tall window with soft wrapping. Returns the joined text.
+pub func area(msg: str, default: str, rows: int) -> str {
+    ar.area(msg, default, rows)
 }
 
 /// Fuzzy-filter select: type narrows the list, Up/Down (or k/j)

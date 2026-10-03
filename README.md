@@ -37,6 +37,9 @@ feats := ask.multi_select("Features:", ["logs", "cache", "tls"])
 | `ask.text_path(msg, default)` | Line editing plus Tab path completion (bell when ambiguous, `/` drill-down for dirs). |
 | `ask.number(msg, default, lo, hi)` | Ranged integer input (`Age [1-120]: `); garbage/out-of-range re-asks. |
 | `ask.multi_select(msg, options)` | Space toggles `[x]`/`[ ]`, Enter confirms. Returns `[str]`. |
+| `ask.editor(msg, default)` / `ask.editor_ext(msg, default, ext)` | Opens `$EDITOR` on a tempfile (scratch `ext` for highlighting); returns saved contents. Aborts keep default. |
+| `ask.confirm_danger(msg, word)` / `ask.confirm_delete(msg)` | Must type `word` exactly (`DELETE`); anything else aborts `false`. |
+| `ask.area(msg, default, rows)` | Multi-line area: arrows, Enter splits, Tab indents, Ctrl+D accepts, Esc cancels. Scrolling window, soft wrap. |
 
 Every prompt hides/shows the cursor as needed, restores cooked mode +
 cursor shape on exit, treats Ctrl+C as cleanup + `exit(130)`, and
@@ -56,15 +59,17 @@ src/
   ask.zz       package entry (thin facade — `import ask`)
   line.zz      text + password + path editor
   number.zz    ranged integer input
-  confirm.zz   yes/no prompt
+  confirm.zz   yes/no + destructive prompts
   select.zz    single + multi menus
   search.zz    fuzzy-filter select
+  area.zz      multi-line text area (pure doc model)
+  editor.zz    $EDITOR integration
   ansi.zz      cursor, erasing, answer lines
   keys.zz      raw key reader + decoders
   buf.zz       editable line buffer (pure)
   path.zz      Tab completion + prefix logic (pure)
   fallback.zz  piped-stdin prompts + pure parsers
-examples/demo.zz   all five prompts (TTY + piped)
+examples/demo.zz   all prompts (TTY + piped)
 tests/             `zz test` — strictly stdin-free, passes on any terminal
 ```
 

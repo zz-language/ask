@@ -1,0 +1,116 @@
+// area_test.zz — unit tests for the textarea document model,
+// wrapping, and cursor math (all pure, no TTY).
+import area
+
+@test
+func test_doc_new_cursor_at_end() {
+    d := area.doc_new("ab\ncde")
+    assert_eq(d.text(), "ab\ncde")
+    assert_eq(d.li, 1)
+    assert_eq(d.col, 3)
+}
+
+@test
+func test_doc_new_empty() {
+    d := area.doc_new("")
+    assert_eq(d.text(), "")
+    assert_eq(d.li, 0)
+    assert_eq(d.col, 0)
+}
+
+@test
+func test_doc_insert_and_split() {
+    d := area.doc_new("ac")
+    d = d.left()
+    d = d.insert("b")
+    assert_eq(d.text(), "abc")
+    d = d.split_line()
+    assert_eq(d.text(), "ab\nc")
+    assert_eq(d.li, 1)
+    assert_eq(d.col, 0)
+}
+
+@test
+func test_doc_backspace_joins() {
+    d := area.doc_new("a\nb")
+    d = d.left()
+    d = d.backspace()
+    assert_eq(d.text(), "ab")
+    assert_eq(d.li, 0)
+    assert_eq(d.col, 1)
+}
+
+@test
+func test_doc_delete_joins() {
+    d := area.doc_new("a\nb")
+    d = d.up()
+    d = d.delete_at()
+    assert_eq(d.text(), "ab")
+    assert_eq(d.li, 0)
+}
+
+@test
+func test_doc_left_right_cross_lines() {
+    d := area.doc_new("a\nbcd")
+    d = d.left()
+    d = d.left()
+    d = d.left()
+    assert_eq(d.li, 1)
+    assert_eq(d.col, 0)
+    d = d.left()
+    assert_eq(d.li, 0)
+    assert_eq(d.col, 1)
+    d = d.right()
+    assert_eq(d.li, 1)
+    assert_eq(d.col, 0)
+}
+
+@test
+func test_doc_up_clamps_column() {
+    d := area.doc_new("ab\nwxyz")
+    d = d.up()
+    assert_eq(d.li, 0)
+    assert_eq(d.col, 2)
+    d = d.down()
+    assert_eq(d.li, 1)
+    assert_eq(d.col, 2)
+}
+
+@test
+func test_doc_home_end() {
+    d := area.doc_new("abc")
+    d = d.home()
+    assert_eq(d.col, 0)
+    d = d.end()
+    assert_eq(d.col, 3)
+}
+
+@test
+func test_disp_height() {
+    assert_eq(area.disp_height("", 4), 1)
+    assert_eq(area.disp_height("abcd", 4), 1)
+    assert_eq(area.disp_height("abcde", 4), 2)
+}
+
+@test
+func test_wrap_chunks() {
+    got := area.wrap_chunks(["abcdef", ""], 4)
+    assert_eq(len(got), 3)
+    assert_eq(got[0], "abcd")
+    assert_eq(got[1], "ef")
+    assert_eq(got[2], "")
+}
+
+@test
+func test_cursor_at_plain() {
+    got := area.cursor_at(["ab", "cde"], 1, 2, 10)
+    assert_eq(got[0], 1)
+    assert_eq(got[1], 2)
+}
+
+@test
+func test_cursor_at_wrapped() {
+    got := area.cursor_at(["abcdef"], 0, 5, 4)
+    assert_eq(got[0], 1)
+    assert_eq(got[1], 1)
+}

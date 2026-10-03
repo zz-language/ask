@@ -25,3 +25,12 @@ path = "../src"
 
 [dependencies.path]
 path = "../src"
+
+[dependencies.area]
+path = "../src"
+
+[dependencies.editor]
+path = "../src"
+
+[dependencies.confirm]
+path = "../src"

@@ -78,8 +78,7 @@ pub func line_validated(
 
 /// Parse a y/n answer against a fully-rendered `prompt` (hint included):
 /// true/false, or `def` on empty input. Anything else re-asks.
-pub func confirm(prompt: str, def: bool) -> bool {
-    out := def
+pub func confirm(prompt: str, def: bool) -> bool {    out := def
     stop := false
     while stop == false {
         a := input("{prompt} ").to_lower()
@@ -142,4 +141,24 @@ pub func picks(msg: str, options: [str]) -> [str] {
         out = vec.push(out, options[v])
     }
     out
+}
+
+/// Multiline fallback: reads lines until a lone "." or an empty
+/// line, joined with newlines. Empty input yields `default`.
+pub func edit_lines(msg: str, default: str) -> str {
+    println("? {msg} (lines, empty ends)")
+    out: [str] = []
+    stop := false
+    while stop == false {
+        ans := input("")
+        if ans == "." || ans == "" {
+            stop = true
+        } else {
+            out = vec.push(out, ans)
+        }
+    }
+    if vec.len(out) == 0 {
+        return default
+    }
+    vec.join(out, "\n")
 }

@@ -1,0 +1,17 @@
+// danger_test.zz — unit tests for destructive-confirm matching.
+//
+// `confirm_danger()` itself prompts, so only the exact-match predicate
+// is pinned here; the prompt loop is covered by `examples/demo.zz`.
+import confirm as cf
+
+@test
+func test_danger_ok_exact() {
+    assert(cf.danger_ok("DELETE", "DELETE"))
+}
+
+@test
+func test_danger_ok_rejects() {
+    assert(cf.danger_ok("delete", "DELETE") == false)
+    assert(cf.danger_ok("", "DELETE") == false)
+    assert(cf.danger_ok("DELETE ", "DELETE") == false)
+}

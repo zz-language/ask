@@ -4,12 +4,32 @@ import std.term
 import ansi
 import fallback
 import keys
+import line
 
 /// Restore the terminal and terminate with code 130 (Ctrl+C).
 func die() -> bool {
     ansi.restore()
     process.exit(130)
     false
+}
+
+/// Exact-match check for destructive prompts (pure, case-sensitive).
+pub func danger_ok(ans: str, word: str) -> bool {
+    ans == word
+}
+
+/// Destructive confirmation: the user must type `word` exactly to
+/// proceed — anything else (including empty) aborts with false.
+/// Full line editing applies; piped stdin reads one plain line.
+pub func confirm_danger(msg: str, word: str) -> bool {
+    println("! {msg}")
+    ans := line.text("Type {word} to confirm: ", "", |_s: str| true, "x")
+    danger_ok(ans, word)
+}
+
+/// Destructive confirmation for the common `DELETE` word.
+pub func confirm_delete(msg: str) -> bool {
+    confirm_danger(msg, "DELETE")
 }
 
 /// Confirmation prompt. The hint follows the default (`[Y/n]` when
