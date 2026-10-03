@@ -1,12 +1,15 @@
 // ask — advanced interactive CLI prompts. Pure ZZ, zero dependencies
-// (only `std` modules: colors, process, str, term, vec).
+// (only `std` modules: colors, fs, process, str, term, vec).
 //
 //   import ask
 //
 //   name := ask.text("Name:", "", |s: str| s != "", "Name is required")
+//   age := ask.number("Age:", 30, 1, 120)
 //   ok := ask.confirm("Deploy?", false)
 //   pw := ask.password("Token:")
+//   cfg := ask.text_path("Config:", "./")
 //   env := ask.select("Target:", ["dev", "stage", "prod"])
+//   shell := ask.search("Shell:", ["bash", "zsh", "fish"])
 //   feats := ask.multi_select("Features:", ["logs", "cache", "tls"])
 //
 // Every prompt collapses to one clean `? msg answer` line when done.
@@ -14,6 +17,8 @@
 // scripts and `zz test` keep working without a terminal.
 import confirm as cf
 import line
+import number as num
+import search as sch
 import select as sel
 
 /// Text input with real-time line editing (arrows, Home/End,
@@ -36,6 +41,24 @@ pub func password(msg: str) -> str {
 /// Masked input with a custom mask character.
 pub func password_mask(msg: str, mask: str) -> str {
     line.password(msg, mask)
+}
+
+/// Path input: line editing plus Tab completion against the file
+/// system (unique directory matches gain a trailing `/`).
+pub func text_path(msg: str, default: str) -> str {
+    line.text_path(msg, default)
+}
+
+/// Ranged integer input (`Age [1-120]: `). Garbage and out-of-range
+/// answers re-ask with a red hint. Returns the accepted number.
+pub func number(msg: str, default: int, lo: int, hi: int) -> int {
+    num.number(msg, default, lo, hi)
+}
+
+/// Fuzzy-filter select: type narrows the list, Up/Down (or k/j)
+/// moves, Enter accepts, Esc cancels ("").
+pub func search(msg: str, options: [str]) -> str {
+    sch.search(msg, options)
 }
 
 /// Yes/no prompt. Hint follows the default (`[Y/n]` / `[y/N]`).

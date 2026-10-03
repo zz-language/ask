@@ -11,10 +11,16 @@ import ansi
 import buf
 import fallback
 import keys
+import path
 
 /// Printable ASCII 32..126 indexed by (byte - 32).
 func glyphs() -> str {
     " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"
+}
+
+/// Single printable byte as a one-character string (for `search`).
+pub func glyph(k: int) -> str {
+    glyphs()[k - 32]
 }
 
 /// Restore the terminal and terminate with code 130 (Ctrl+C).
@@ -36,7 +42,8 @@ func live() -> bool {
 }
 
 /// Redraw the prompt line in place and park the cursor over the buffer.
-func draw(msg: str, b: buf.Line, masked: bool, mask: str) {
+/// Exported for `search`, which borrows the input row for its filter.
+pub func draw_input(msg: str, b: buf.Line, masked: bool, mask: str) {
     shown := b.text()
     if masked {
         shown = ""
@@ -54,12 +61,19 @@ func draw(msg: str, b: buf.Line, masked: bool, mask: str) {
     term.flush()
 }
 
-/// Shared editor loop. `masked` switches echo to `mask` (passwords).
+/// Shared editor loop. `masked` switches echo to `mask` (passwords);
+/// `on_tab` handles Tab (path completion, or identity for plain input).
 /// Returns the accepted buffer contents. Leaves the terminal raw —
 /// callers own restore + the final answer line (validation may retry).
-func edit(msg: str, b: buf.Line, masked: bool, mask: str) -> str {
+func edit(
+    msg: str,
+    b: buf.Line,
+    masked: bool,
+    mask: str,
+    on_tab: func(buf.Line) -> buf.Line,
+) -> str {
     cur := b
-    draw(msg, cur, masked, mask)
+    draw_input(msg, cur, masked, mask)
     k := 0
     done := false
     while done == false {
@@ -70,25 +84,28 @@ func edit(msg: str, b: buf.Line, masked: bool, mask: str) -> str {
             return die()
         } else if k == keys.KEY_LEFT {
             cur = cur.left()
-            draw(msg, cur, masked, mask)
+            draw_input(msg, cur, masked, mask)
         } else if k == keys.KEY_RIGHT {
             cur = cur.right()
-            draw(msg, cur, masked, mask)
+            draw_input(msg, cur, masked, mask)
         } else if k == keys.KEY_HOME {
             cur = cur.home()
-            draw(msg, cur, masked, mask)
+            draw_input(msg, cur, masked, mask)
         } else if k == keys.KEY_END {
             cur = cur.end()
-            draw(msg, cur, masked, mask)
+            draw_input(msg, cur, masked, mask)
         } else if k == keys.KEY_BACKSPACE || k == 8 {
             cur = cur.backspace()
-            draw(msg, cur, masked, mask)
+            draw_input(msg, cur, masked, mask)
         } else if k == keys.KEY_DELETE {
             cur = cur.delete_at()
-            draw(msg, cur, masked, mask)
+            draw_input(msg, cur, masked, mask)
+        } else if k == keys.KEY_TAB {
+            cur = on_tab(cur)
+            draw_input(msg, cur, masked, mask)
         } else if k >= 32 && k <= 126 {
             cur = cur.insert(glyphs()[k - 32])
-            draw(msg, cur, masked, mask)
+            draw_input(msg, cur, masked, mask)
         }
     }
     cur.text()
@@ -105,7 +122,7 @@ pub func text(msg: str, default: str, validator: func(str) -> bool, err_msg: str
             return fallback.line_validated(msg, cur_def, validator, err_msg)
         }
         ansi.bar()
-        val = edit(msg, buf.from(cur_def), false, "*")
+        val = edit(msg, buf.from(cur_def), false, "*", |b: buf.Line| b)
         ansi.restore()
         if validator(val) {
             ansi.answer(msg, val)
@@ -124,8 +141,22 @@ pub func password(msg: str, mask: str) -> str {
         return fallback.line(msg, "")
     }
     ansi.bar()
-    val := edit(msg, buf.blank(), true, mask)
+    val := edit(msg, buf.blank(), true, mask, |b: buf.Line| b)
     ansi.restore()
     ansi.answer(msg, "(hidden)")
+    val
+}
+
+/// Path input: full line editing plus Tab completion against the
+/// file system (longest common prefix; bell when ambiguous; a unique
+/// directory match gains a trailing `/` for drill-down).
+pub func text_path(msg: str, default: str) -> str {
+    if live() == false {
+        return fallback.line(msg, default)
+    }
+    ansi.bar()
+    val := edit(msg, buf.from(default), false, "*", |b: buf.Line| path.complete(b))
+    ansi.restore()
+    ansi.answer(msg, val)
     val
 }

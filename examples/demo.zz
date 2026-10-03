@@ -22,5 +22,14 @@ func main() {
     // 5. Multi-select (Space toggles, Enter confirms).
     feats := ask.multi_select("Features:", ["logs", "cache", "tls"])
     println("feats: {feats}")
+    // 6. Ranged number (150 rejected, 25 accepted).
+    age := ask.number("Age:", 30, 1, 120)
+    println("age: {age}")
+    // 7. Path input with Tab completion (plain input when piped).
+    cfg := ask.text_path("Config:", "./")
+    println("cfg: {cfg}")
+    // 8. Fuzzy search (type narrows, arrows move, Enter picks).
+    shell := ask.search("Shell:", ["bash", "zsh", "fish", "powershell", "nu"])
+    println("shell: {shell}")
     println("demo_ok")
 }

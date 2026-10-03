@@ -1,0 +1,18 @@
+// number.zz — ranged numeric input on top of the line editor.
+import line
+
+/// Pure range check: parses and bounds in one predicate (unit-testable).
+pub func in_range(s: str, lo: int, hi: int) -> bool {
+    match int(s) {
+        .some(v) => v >= lo && v <= hi
+        .none => false
+    }
+}
+
+/// Integer input clamped by validation to [lo, hi]. The prompt shows
+/// the range (`Age [1-120]: `); garbage and out-of-range answers
+/// re-ask with a red hint. Returns the accepted number.
+pub func number(msg: str, default: int, lo: int, hi: int) -> int {
+    val := line.text("{msg} [{lo}-{hi}]: ", str(default), |s: str| in_range(s, lo, hi), "Enter a whole number {lo}-{hi}.")
+    int(val) ?? default
+}

@@ -16,3 +16,8 @@ func test_ask_select_empty_options() {
 func test_ask_multi_empty_options() {
     assert_eq(ask.multi_select("Pick:", []), [])
 }
+
+@test
+func test_ask_search_empty_options() {
+    assert_eq(ask.search("Pick:", []), "")
+}

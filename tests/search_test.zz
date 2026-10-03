@@ -1,0 +1,40 @@
+// search_test.zz — unit tests for fuzzy filtering (pure, no TTY).
+import search
+
+@test
+func test_matches_case_insensitive() {
+    assert(search.matches("sh", "zsh"))
+    assert(search.matches("SH", "zsh"))
+    assert(search.matches("zsh", "ZSH"))
+}
+
+@test
+func test_matches_empty_query_matches_all() {
+    assert(search.matches("", "anything"))
+}
+
+@test
+func test_matches_rejects() {
+    assert(search.matches("x", "bash") == false)
+    assert(search.matches("bash!", "bash") == false)
+}
+
+@test
+func test_filter_options_order_and_subset() {
+    got := search.filter_options("sh", ["bash", "fish", "zsh", "nu"])
+    assert_eq(len(got), 3)
+    assert_eq(got[0], "bash")
+    assert_eq(got[1], "fish")
+    assert_eq(got[2], "zsh")
+}
+
+@test
+func test_filter_options_empty_query_returns_all() {
+    got := search.filter_options("", ["a", "b"])
+    assert_eq(len(got), 2)
+}
+
+@test
+func test_filter_options_no_match() {
+    assert_eq(len(search.filter_options("zzz", ["a", "b"])), 0)
+}

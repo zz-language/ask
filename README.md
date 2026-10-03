@@ -33,6 +33,9 @@ feats := ask.multi_select("Features:", ["logs", "cache", "tls"])
 | `ask.confirm_hint(msg, def, hint)` | Same with a custom hint label. |
 | `ask.password(msg)` / `ask.password_mask(msg, mask)` | Masked echo (`*` default), Backspace works. Never prints the secret. |
 | `ask.select(msg, options)` | Arrow/`k`/`j` menu, `>` + bold green active row, Enter picks. Returns the string. |
+| `ask.search(msg, options)` | Fuzzy-filter select: type narrows (case-insensitive), Up/Down moves, Enter accepts, Esc cancels (`""`). |
+| `ask.text_path(msg, default)` | Line editing plus Tab path completion (bell when ambiguous, `/` drill-down for dirs). |
+| `ask.number(msg, default, lo, hi)` | Ranged integer input (`Age [1-120]: `); garbage/out-of-range re-asks. |
 | `ask.multi_select(msg, options)` | Space toggles `[x]`/`[ ]`, Enter confirms. Returns `[str]`. |
 
 Every prompt hides/shows the cursor as needed, restores cooked mode +
@@ -51,12 +54,15 @@ comma list (`1,3`, empty = none).
 ```
 src/
   ask.zz       package entry (thin facade — `import ask`)
-  line.zz      text + password editor
+  line.zz      text + password + path editor
+  number.zz    ranged integer input
   confirm.zz   yes/no prompt
   select.zz    single + multi menus
+  search.zz    fuzzy-filter select
   ansi.zz      cursor, erasing, answer lines
   keys.zz      raw key reader + decoders
   buf.zz       editable line buffer (pure)
+  path.zz      Tab completion + prefix logic (pure)
   fallback.zz  piped-stdin prompts + pure parsers
 examples/demo.zz   all five prompts (TTY + piped)
 tests/             `zz test` — strictly stdin-free, passes on any terminal

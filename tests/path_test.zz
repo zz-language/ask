@@ -1,0 +1,60 @@
+// path_test.zz — unit tests for path splitting and prefix logic.
+//
+// `complete()` itself touches the file system (no stdin), so the
+// missing-dir case is pinned here; live completion is verified through
+// `examples/demo.zz` on a real TTY.
+import buf
+import path
+
+@test
+func test_split_prefix_bare() {
+    got := path.split_prefix("readm")
+    assert_eq(got[0], ".")
+    assert_eq(got[1], "readm")
+}
+
+@test
+func test_split_prefix_relative() {
+    got := path.split_prefix("src/bu")
+    assert_eq(got[0], "src")
+    assert_eq(got[1], "bu")
+}
+
+@test
+func test_split_prefix_trailing_slash() {
+    got := path.split_prefix("src/")
+    assert_eq(got[0], "src")
+    assert_eq(got[1], "")
+}
+
+@test
+func test_split_prefix_absolute() {
+    got := path.split_prefix("/tmp/xy")
+    assert_eq(got[0], "/tmp")
+    assert_eq(got[1], "xy")
+}
+
+@test
+func test_joinpath_shapes() {
+    assert_eq(path.joinpath(".", "f"), "f")
+    assert_eq(path.joinpath("/", "f"), "/f")
+    assert_eq(path.joinpath("src", "f"), "src/f")
+}
+
+@test
+func test_common_prefix_extends() {
+    assert_eq(path.common_prefix(["readm", "readme"], 4), "m")
+    assert_eq(path.common_prefix(["abc"], 0), "abc")
+}
+
+@test
+func test_common_prefix_ambiguous() {
+    assert_eq(path.common_prefix(["ab", "ac"], 1), "")
+    assert_eq(path.common_prefix([], 0), "")
+}
+
+@test
+func test_complete_missing_dir_unchanged() {
+    b := buf.from("nodir_xyz_ask/q")
+    assert_eq(path.complete(b).text(), "nodir_xyz_ask/q")
+}

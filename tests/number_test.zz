@@ -1,0 +1,24 @@
+// number_test.zz — unit tests for ranged numeric validation (pure).
+import number
+
+@test
+func test_in_range_valid() {
+    assert(number.in_range("25", 1, 120))
+    assert(number.in_range("1", 1, 120))
+    assert(number.in_range("120", 1, 120))
+}
+
+@test
+func test_in_range_outside() {
+    assert(number.in_range("0", 1, 120) == false)
+    assert(number.in_range("121", 1, 120) == false)
+    assert(number.in_range("-5", 1, 120) == false)
+}
+
+@test
+func test_in_range_garbage() {
+    assert(number.in_range("", 1, 120) == false)
+    assert(number.in_range("abc", 1, 120) == false)
+    assert(number.in_range("12x", 1, 120) == false)
+    assert(number.in_range("3.5", 1, 120) == false)
+}

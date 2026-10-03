@@ -1,0 +1,117 @@
+// path.zz — Tab completion for file-system paths.
+//
+// Pure splitter + longest-common-prefix logic (unit-testable) over a
+// thin `fs.read_dir` lookup. Ambiguous prefixes ring the terminal bell
+// and leave the buffer untouched; a unique directory match gains a
+// trailing `/` so repeated Tab drills deeper.
+import std.fs
+import std.str
+import std.term
+import std.vec
+import buf
+
+/// Split buffer text at the last `/` into [dir, prefix].
+/// No slash → [".", whole]; trailing slash → ["dir", ""].
+pub func split_prefix(s: str) -> [str] {
+    parts := str.split(s, "/")
+    n := vec.len(parts)
+    if n <= 1 {
+        return [".", s]
+    }
+    prefix := parts[n - 1]
+    dir := vec.join(parts[:n - 1], "/")
+    if dir == "" {
+        dir = "/"
+    }
+    [dir, prefix]
+}
+
+/// Join a completed leaf back onto its directory.
+pub func joinpath(dir: str, leaf: str) -> str {
+    if dir == "." {
+        return leaf
+    }
+    if dir == "/" {
+        return "/" + leaf
+    }
+    dir + "/" + leaf
+}
+
+/// Longest shared extension of `cands` past `base` chars (pure).
+pub func common_prefix(cands: [str], base: int) -> str {
+    extra := ""
+    i := base
+    more := true
+    while more {
+        ch := ""
+        j := 0
+        for c in cands {
+            if len(c) <= i {
+                more = false
+            } else if j == 0 {
+                ch = c[i]
+            } else if c[i] != ch {
+                more = false
+            }
+            j = j + 1
+        }
+        if more {
+            if ch == "" {
+                more = false
+            } else {
+                extra = extra + ch
+                i = i + 1
+            }
+        }
+    }
+    extra
+}
+
+func bell() {
+    print("\x07")
+    term.flush()
+}
+
+/// Tab handler for the line editor: completes the path under the
+/// cursor, rings the bell when nothing matches or everything is
+/// ambiguous. Returns the (possibly unchanged) buffer.
+pub func complete(b: buf.Line) -> buf.Line {
+    pair := split_prefix(b.text())
+    dir := pair[0]
+    prefix := pair[1]
+    entries: [str] = []
+    found := false
+    match fs.read_dir(dir) {
+        .ok(e) => {
+            entries = e
+            found = true
+        }
+        .err(_) => {
+            found = false
+        }
+    }
+    if found == false {
+        return b
+    }
+    cands: [str] = []
+    for e in entries {
+        if e.starts_with(prefix) {
+            cands = vec.push(cands, e)
+        }
+    }
+    if vec.len(cands) == 0 {
+        bell()
+        return b
+    }
+    extra := common_prefix(cands, len(prefix))
+    full := prefix + extra
+    if vec.len(cands) == 1 {
+        if fs.is_dir(joinpath(dir, full)) {
+            full = full + "/"
+        }
+    } else if extra == "" {
+        bell()
+        return b
+    }
+    buf.from(joinpath(dir, full))
+}

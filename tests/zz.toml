@@ -16,3 +16,12 @@ path = "../src"
 
 [dependencies.fallback]
 path = "../src"
+
+[dependencies.number]
+path = "../src"
+
+[dependencies.search]
+path = "../src"
+
+[dependencies.path]
+path = "../src"

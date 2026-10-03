@@ -1,0 +1,177 @@
+// search.zz — fuzzy-filter select: type to narrow, arrows to move.
+//
+// Layout: one filter input row (borrowed line editor, cursor parked in
+// the query) plus up to SEARCH_ROWS matches below. Every keystroke
+// wipes the block and reprints it. Up/Down moves in the filtered list,
+// Enter accepts the highlight, Esc cancels with "", Ctrl+C exits(130).
+import std.colors
+import std.process
+import std.term
+import std.vec
+import ansi
+import buf
+import fallback
+import keys
+import line
+
+/// Max matches shown under the filter row.
+pub const SEARCH_ROWS: int = 8
+
+/// Case-insensitive substring match; empty queries match all (pure).
+pub func matches(q: str, opt: str) -> bool {
+    if q == "" {
+        return true
+    }
+    opt.to_lower().contains(q.to_lower())
+}
+
+/// Options matching `q` in order (pure).
+pub func filter_options(q: str, options: [str]) -> [str] {
+    out: [str] = []
+    for opt in options {
+        if matches(q, opt) {
+            out = vec.push(out, opt)
+        }
+    }
+    out
+}
+
+/// Restore the terminal and terminate with code 130 (Ctrl+C).
+func die() -> str {
+    ansi.restore()
+    process.exit(130)
+    ""
+}
+
+/// True when stdin can do raw interactive menus.
+func live() -> bool {
+    if term.is_tty() == false {
+        return false
+    }
+    match term.enable_raw() {
+        .ok(_) => true
+        .err(_) => false
+    }
+}
+
+/// One match row: `>` + bold green on the highlight.
+func srow(opt: str, active: bool) -> str {
+    if active {
+        return "> " + colors.bold(colors.green(opt))
+    }
+    "  " + opt
+}
+
+/// Print the filter row plus `rows`, then park the cursor back inside
+/// the query: rows end with `\r\n` (raw mode kills ONLCR), so move up
+/// past them and step right over prompt + cursor offset.
+func draw(msg: str, q: buf.Line, rows: [str]) {
+    line.draw_input("? {msg} ", q, false, "*")
+    for r in rows {
+        print(r + "\r\n")
+    }
+    up := vec.len(rows)
+    if up > 0 {
+        print("\x1b[{up}A")
+    }
+    fwd := len(msg) + 2 + q.cursor
+    print("\r\x1b[{fwd}C")
+    term.flush()
+}
+
+/// Visible rows for `opts` with `idx` highlighted (capped + overflow).
+func vis_rows(opts: [str], idx: int) -> [str] {
+    shown := opts
+    if vec.len(opts) > SEARCH_ROWS {
+        shown = opts[:SEARCH_ROWS]
+    }
+    out: [str] = []
+    i := 0
+    for opt in shown {
+        if i == idx {
+            out = vec.push(out, srow(opt, true))
+        } else {
+            out = vec.push(out, srow(opt, false))
+        }
+        i = i + 1
+    }
+    if vec.len(opts) > SEARCH_ROWS {
+        out = vec.push(out, "  ...{vec.len(opts) - SEARCH_ROWS} more")
+    }
+    out
+}
+
+/// Fuzzy select. Type narrows the list, Up/Down (or k/j) moves, Enter
+/// accepts, Esc cancels (""). Non-TTY falls back to a numbered pick.
+pub func search(msg: str, options: [str]) -> str {
+    n := vec.len(options)
+    if n == 0 {
+        return ""
+    }
+    if live() == false {
+        return fallback.pick(msg + " (filter)", options)
+    }
+    ansi.hide()
+    q := buf.blank()
+    idx := 0
+    hits := filter_options("", options)
+    rows := vis_rows(hits, idx)
+    draw(msg, q, rows)
+    total := 1 + vec.len(rows)
+    stop := false
+    while stop == false {
+        k := keys.next()
+        if k == keys.KEY_EOF {
+            stop = true
+        } else if k == keys.KEY_CTRL_C {
+            return die()
+        } else if k == keys.KEY_ENTER {
+            stop = true
+        } else if k == keys.KEY_ESC {
+            ansi.restore()
+            ansi.wipe(total)
+            ansi.answer(msg, "(cancelled)")
+            return ""
+        } else if k == keys.KEY_UP || k == 107 {
+            if vec.len(hits) > 0 {
+                idx = (idx + vec.len(hits) - 1) % vec.len(hits)
+                rows = vis_rows(hits, idx)
+                ansi.wipe(total)
+                total = 1 + vec.len(rows)
+                draw(msg, q, rows)
+            }
+        } else if k == keys.KEY_DOWN || k == 106 {
+            if vec.len(hits) > 0 {
+                idx = (idx + 1) % vec.len(hits)
+                rows = vis_rows(hits, idx)
+                ansi.wipe(total)
+                total = 1 + vec.len(rows)
+                draw(msg, q, rows)
+            }
+        } else if k == keys.KEY_BACKSPACE || k == 8 {
+            q = q.backspace()
+            hits = filter_options(q.text(), options)
+            idx = 0
+            rows = vis_rows(hits, idx)
+            ansi.wipe(total)
+            total = 1 + vec.len(rows)
+            draw(msg, q, rows)
+        } else if k >= 32 && k <= 126 {
+            q = q.insert(line.glyph(k))
+            hits = filter_options(q.text(), options)
+            idx = 0
+            rows = vis_rows(hits, idx)
+            ansi.wipe(total)
+            total = 1 + vec.len(rows)
+            draw(msg, q, rows)
+        }
+    }
+    ansi.restore()
+    ansi.wipe(total)
+    if vec.len(hits) == 0 {
+        ansi.answer(msg, "(none)")
+        return ""
+    }
+    ansi.answer(msg, hits[idx])
+    hits[idx]
+}
