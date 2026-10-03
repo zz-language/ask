@@ -1,0 +1,145 @@
+// fallback.zz — line-buffered prompts for non-TTY stdin.
+//
+// When stdin is not a terminal (pipes, CI) raw mode is unavailable, so
+// every prompt degrades to plain `input()` here. Same return shapes as
+// the interactive paths.
+//
+// Testability: all parsing lives in pure helpers (`coalesce`,
+// `confirm_parse`, `pick_index`, `picks_parse`) covered by
+// `tests/fallback_test.zz`. The `input()` wrappers themselves are thin
+// on purpose — automated tests must never block on stdin, so they are
+// verified through `examples/demo.zz` (piped) and manual TTY runs.
+import std.str
+import std.vec
+
+/// Empty answer falls back to `default` (pure).
+pub func coalesce(ans: str, default: str) -> str {
+    if ans == "" {
+        return default
+    }
+    ans
+}
+
+/// Parse a y/n word: `.some(true/false)`, `.none` when unclear (pure).
+/// Case-insensitive. Empty input is NOT handled here — callers map it
+/// to the default.
+pub func confirm_parse(a: str) -> Option<bool> {
+    t := a.to_lower()
+    if t == "y" || t == "yes" {
+        return .some(true)
+    }
+    if t == "n" || t == "no" {
+        return .some(false)
+    }
+    .none
+}
+
+/// Parse a 1-based pick against `n` options: `.some(0-based)` or `.none`.
+pub func pick_index(ans: str, n: int) -> Option<int> {
+    v := int(ans) ?? -1
+    if v >= 1 && v <= n {
+        return .some(v - 1)
+    }
+    .none
+}
+
+/// Parse a comma-separated multi pick ("1,3") into valid 0-based
+/// indices, silently skipping garbage (pure, never fails).
+pub func picks_parse(ans: str, n: int) -> [int] {
+    out: [int] = []
+    for part in str.split(ans, ",") {
+        v := int(part.trim()) ?? -1
+        if v >= 1 && v <= n {
+            out = vec.push(out, v - 1)
+        }
+    }
+    out
+}
+
+/// Plain line input honoring the default when the answer is empty.
+pub func line(msg: str, default: str) -> str {
+    coalesce(input("{msg} "), default)
+}
+
+/// Validated line input: re-asks until `validator` passes.
+pub func line_validated(
+    msg: str,
+    default: str,
+    validator: func(str) -> bool,
+    err_msg: str,
+) -> str {
+    ans := coalesce(input("{msg} "), default)
+    while validator(ans) == false {
+        println(err_msg)
+        ans = coalesce(input("{msg} "), default)
+    }
+    ans
+}
+
+/// Parse a y/n answer against a fully-rendered `prompt` (hint included):
+/// true/false, or `def` on empty input. Anything else re-asks.
+pub func confirm(prompt: str, def: bool) -> bool {
+    out := def
+    stop := false
+    while stop == false {
+        a := input("{prompt} ").to_lower()
+        if a == "" {
+            stop = true
+        } else {
+            match confirm_parse(a) {
+                .some(v) => {
+                    out = v
+                    stop = true
+                }
+                .none => println("Answer y or n.")
+            }
+        }
+    }
+    out
+}
+
+/// Numbered single pick: prints options, reads a 1-based number.
+pub func pick(msg: str, options: [str]) -> str {
+    println("? {msg}")
+    i := 0
+    for opt in options {
+        println("  {i + 1}) {opt}")
+        i = i + 1
+    }
+    ans := input("Number [1-{vec.len(options)}]: ")
+    got := pick_index(ans, vec.len(options))
+    stop := false
+    while stop == false {
+        match got {
+            .some(v) => {
+                stop = true
+            }
+            .none => {
+                println("Pick a number 1-{vec.len(options)}.")
+                ans = input("Number [1-{vec.len(options)}]: ")
+                got = pick_index(ans, vec.len(options))
+            }
+        }
+    }
+    match got {
+        .some(v) => options[v]
+        .none => options[0]
+    }
+}
+
+/// Comma-separated multi pick ("1,3"): returns chosen option strings.
+/// Empty input selects nothing.
+pub func picks(msg: str, options: [str]) -> [str] {
+    println("? {msg}")
+    i := 0
+    for opt in options {
+        println("  {i + 1}) [ ] {opt}")
+        i = i + 1
+    }
+    ans := input("Numbers, comma-separated (empty = none): ")
+    out: [str] = []
+    for v in picks_parse(ans, vec.len(options)) {
+        out = vec.push(out, options[v])
+    }
+    out
+}

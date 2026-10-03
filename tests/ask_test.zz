@@ -1,0 +1,18 @@
+// ask_test.zz — public API tests for the ask package.
+//
+// Strictly stdin-free: automated tests inherit the caller's stdin, so
+// any prompt touching `input()` or raw mode would block forever on a
+// real terminal. Only paths that return before any I/O are covered
+// here (empty menus); interactive and piped-stdin behavior is verified
+// through `examples/demo.zz` plus manual TTY runs.
+import ask
+
+@test
+func test_ask_select_empty_options() {
+    assert_eq(ask.select("Pick:", []), "")
+}
+
+@test
+func test_ask_multi_empty_options() {
+    assert_eq(ask.multi_select("Pick:", []), [])
+}

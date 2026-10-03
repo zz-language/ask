@@ -1,0 +1,131 @@
+// line.zz — raw line editor backing `ask.text` and `ask.password`.
+//
+// One-line redraw (`\r` + erase + prompt + buffer + cursor-left moves),
+// cursor navigation (Left/Right/Home/End), Backspace/Delete relative to
+// the cursor, printable ASCII insertion. Ctrl+C restores the terminal
+// and exits(130); EOF accepts the current buffer.
+import std.colors
+import std.process
+import std.term
+import ansi
+import buf
+import fallback
+import keys
+
+/// Printable ASCII 32..126 indexed by (byte - 32).
+func glyphs() -> str {
+    " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"
+}
+
+/// Restore the terminal and terminate with code 130 (Ctrl+C).
+func die() -> str {
+    ansi.restore()
+    process.exit(130)
+    ""
+}
+
+/// True when stdin can do raw interactive prompts.
+func live() -> bool {
+    if term.is_tty() == false {
+        return false
+    }
+    match term.enable_raw() {
+        .ok(_) => true
+        .err(_) => false
+    }
+}
+
+/// Redraw the prompt line in place and park the cursor over the buffer.
+func draw(msg: str, b: buf.Line, masked: bool, mask: str) {
+    shown := b.text()
+    if masked {
+        shown = ""
+        i := 0
+        while i < b.size() {
+            shown = shown + mask
+            i = i + 1
+        }
+    }
+    back := b.size() - b.cursor
+    print("\r\x1b[K{msg}{shown}")
+    if back > 0 {
+        print("\x1b[{back}D")
+    }
+    term.flush()
+}
+
+/// Shared editor loop. `masked` switches echo to `mask` (passwords).
+/// Returns the accepted buffer contents. Leaves the terminal raw —
+/// callers own restore + the final answer line (validation may retry).
+func edit(msg: str, b: buf.Line, masked: bool, mask: str) -> str {
+    cur := b
+    draw(msg, cur, masked, mask)
+    k := 0
+    done := false
+    while done == false {
+        k = keys.next()
+        if k == keys.KEY_EOF || k == keys.KEY_ENTER {
+            done = true
+        } else if k == keys.KEY_CTRL_C {
+            return die()
+        } else if k == keys.KEY_LEFT {
+            cur = cur.left()
+            draw(msg, cur, masked, mask)
+        } else if k == keys.KEY_RIGHT {
+            cur = cur.right()
+            draw(msg, cur, masked, mask)
+        } else if k == keys.KEY_HOME {
+            cur = cur.home()
+            draw(msg, cur, masked, mask)
+        } else if k == keys.KEY_END {
+            cur = cur.end()
+            draw(msg, cur, masked, mask)
+        } else if k == keys.KEY_BACKSPACE || k == 8 {
+            cur = cur.backspace()
+            draw(msg, cur, masked, mask)
+        } else if k == keys.KEY_DELETE {
+            cur = cur.delete_at()
+            draw(msg, cur, masked, mask)
+        } else if k >= 32 && k <= 126 {
+            cur = cur.insert(glyphs()[k - 32])
+            draw(msg, cur, masked, mask)
+        }
+    }
+    cur.text()
+}
+
+/// Text input with real-time editing. Keeps asking until `validator`
+/// passes; failures print a red line below, keep the buffer, redraw.
+pub func text(msg: str, default: str, validator: func(str) -> bool, err_msg: str) -> str {
+    cur_def := default
+    val := cur_def
+    again := true
+    while again {
+        if live() == false {
+            return fallback.line_validated(msg, cur_def, validator, err_msg)
+        }
+        ansi.bar()
+        val = edit(msg, buf.from(cur_def), false, "*")
+        ansi.restore()
+        if validator(val) {
+            ansi.answer(msg, val)
+            return val
+        }
+        println(colors.red(err_msg))
+        cur_def = val
+    }
+    val
+}
+
+/// Masked input: typed characters echo as `mask`, full Backspace support.
+/// Enter accepts (empty allowed — validate via `text` when needed).
+pub func password(msg: str, mask: str) -> str {
+    if live() == false {
+        return fallback.line(msg, "")
+    }
+    ansi.bar()
+    val := edit(msg, buf.blank(), true, mask)
+    ansi.restore()
+    ansi.answer(msg, "(hidden)")
+    val
+}

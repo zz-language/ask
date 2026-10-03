@@ -1,0 +1,26 @@
+// Demo of the ask package. Raw prompts need a real TTY; with piped
+// stdin every prompt degrades to plain input() automatically.
+// Run from examples/:
+//   zz install && zz run demo.zz
+import ask
+
+func main() {
+    // 1. Text with cursor navigation + validation (min 3 chars).
+    name := ask.text_msg("Name:", "ada", |s: str| len(s) > 2, "Need 3+ chars")
+    println("hello {name}")
+    // 2. Confirmation, both default styles.
+    deploy := ask.confirm("Deploy to prod?", false)
+    println("deploy: {deploy}")
+    verbose := ask.confirm("Verbose logs?", true)
+    println("verbose: {verbose}")
+    // 3. Masked input with a custom mask character.
+    token := ask.password_mask("API token:", "#")
+    println("token length: {len(token)}")
+    // 4. Single select (arrows or k/j, Enter accepts).
+    env := ask.select("Target:", ["dev", "stage", "prod"])
+    println("env: {env}")
+    // 5. Multi-select (Space toggles, Enter confirms).
+    feats := ask.multi_select("Features:", ["logs", "cache", "tls"])
+    println("feats: {feats}")
+    println("demo_ok")
+}

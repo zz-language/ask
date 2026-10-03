@@ -1,0 +1,102 @@
+// fallback_test.zz — unit tests for the pure fallback parsers.
+//
+// Only stdin-free helpers are tested here: automated tests inherit the
+// caller's stdin, so anything calling `input()` would block forever on
+// a real terminal. The thin `input()` wrappers are verified through
+// `examples/demo.zz` (piped) and manual TTY runs instead.
+import fallback
+
+@test
+func test_coalesce_empty_wins_default() {
+    assert_eq(fallback.coalesce("", "ada"), "ada")
+}
+
+@test
+func test_coalesce_value_wins() {
+    assert_eq(fallback.coalesce("bob", "ada"), "bob")
+}
+
+@test
+func test_confirm_parse_yes() {
+    match fallback.confirm_parse("y") {
+        .some(v) => assert(v)
+        .none => assert(false)
+    }
+    match fallback.confirm_parse("YES") {
+        .some(v) => assert(v)
+        .none => assert(false)
+    }
+}
+
+@test
+func test_confirm_parse_no() {
+    match fallback.confirm_parse("n") {
+        .some(v) => assert(v == false)
+        .none => assert(false)
+    }
+    match fallback.confirm_parse("no") {
+        .some(v) => assert(v == false)
+        .none => assert(false)
+    }
+}
+
+@test
+func test_confirm_parse_unclear_is_none() {
+    match fallback.confirm_parse("maybe") {
+        .some(_) => assert(false)
+        .none => assert(true)
+    }
+    match fallback.confirm_parse("") {
+        .some(_) => assert(false)
+        .none => assert(true)
+    }
+}
+
+@test
+func test_pick_index_valid() {
+    match fallback.pick_index("2", 3) {
+        .some(v) => assert_eq(v, 1)
+        .none => assert(false)
+    }
+    match fallback.pick_index("1", 3) {
+        .some(v) => assert_eq(v, 0)
+        .none => assert(false)
+    }
+}
+
+@test
+func test_pick_index_invalid_is_none() {
+    match fallback.pick_index("0", 3) {
+        .some(_) => assert(false)
+        .none => assert(true)
+    }
+    match fallback.pick_index("4", 3) {
+        .some(_) => assert(false)
+        .none => assert(true)
+    }
+    match fallback.pick_index("abc", 3) {
+        .some(_) => assert(false)
+        .none => assert(true)
+    }
+    match fallback.pick_index("", 3) {
+        .some(_) => assert(false)
+        .none => assert(true)
+    }
+}
+
+@test
+func test_picks_parse_mixed() {
+    got := fallback.picks_parse("1,3", 3)
+    assert_eq(len(got), 2)
+    assert_eq(got[0], 0)
+    assert_eq(got[1], 2)
+    assert_eq(len(fallback.picks_parse("", 3)), 0)
+    skip := fallback.picks_parse("2,99,abc,1", 3)
+    assert_eq(len(skip), 2)
+    assert_eq(skip[0], 1)
+    assert_eq(skip[1], 0)
+    spaced := fallback.picks_parse(" 2 , 3 ", 3)
+    assert_eq(len(spaced), 2)
+    assert_eq(spaced[0], 1)
+    assert_eq(spaced[1], 2)
+}

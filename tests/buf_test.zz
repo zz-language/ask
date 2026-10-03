@@ -1,0 +1,67 @@
+// buf_test.zz — unit tests for the editable line buffer (pure, no TTY).
+import buf
+
+@test
+func test_buf_from_and_text() {
+    b := buf.from("hey")
+    assert_eq(b.text(), "hey")
+    assert_eq(b.size(), 3)
+    assert_eq(b.cursor, 3)
+}
+
+@test
+func test_buf_insert_middle() {
+    b := buf.from("ac")
+    b = b.left()
+    b = b.insert("b")
+    assert_eq(b.text(), "abc")
+    assert_eq(b.cursor, 2)
+}
+
+@test
+func test_buf_backspace_delete() {
+    b := buf.from("abc")
+    b = b.left()
+    b = b.backspace()
+    assert_eq(b.text(), "ac")
+    b = b.delete_at()
+    assert_eq(b.text(), "a")
+}
+
+@test
+func test_buf_backspace_at_zero_keeps() {
+    b := buf.from("ab")
+    b = b.home()
+    b = b.backspace()
+    assert_eq(b.text(), "ab")
+    assert_eq(b.cursor, 0)
+}
+
+@test
+func test_buf_delete_at_end_keeps() {
+    b := buf.from("ab")
+    b = b.delete_at()
+    assert_eq(b.text(), "ab")
+}
+
+@test
+func test_buf_home_end_clamp() {
+    b := buf.from("ab")
+    b = b.left()
+    b = b.left()
+    b = b.left()
+    assert_eq(b.cursor, 0)
+    b = b.right()
+    b = b.right()
+    b = b.right()
+    assert_eq(b.cursor, 2)
+}
+
+@test
+func test_buf_blank() {
+    b := buf.blank()
+    assert_eq(b.text(), "")
+    assert_eq(b.size(), 0)
+    b = b.insert("z")
+    assert_eq(b.text(), "z")
+}

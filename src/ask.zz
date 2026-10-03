@@ -1,0 +1,62 @@
+// ask — advanced interactive CLI prompts. Pure ZZ, zero dependencies
+// (only `std` modules: colors, process, str, term, vec).
+//
+//   import ask
+//
+//   name := ask.text("Name:", "", |s: str| s != "", "Name is required")
+//   ok := ask.confirm("Deploy?", false)
+//   pw := ask.password("Token:")
+//   env := ask.select("Target:", ["dev", "stage", "prod"])
+//   feats := ask.multi_select("Features:", ["logs", "cache", "tls"])
+//
+// Every prompt collapses to one clean `? msg answer` line when done.
+// Piped stdin (no TTY) degrades to plain `input()` automatically, so
+// scripts and `zz test` keep working without a terminal.
+import confirm as cf
+import line
+import select as sel
+
+/// Text input with real-time line editing (arrows, Home/End,
+// Backspace/Delete, bar cursor). Retries until `validator` passes;
+// failures print `err_msg` in red below and keep the buffer.
+pub func text(msg: str, default: str, validator: func(str) -> bool) -> str {
+    line.text(msg, default, validator, "Invalid input, try again.")
+}
+
+/// Text input with a custom validation message.
+pub func text_msg(msg: str, default: str, validator: func(str) -> bool, err_msg: str) -> str {
+    line.text(msg, default, validator, err_msg)
+}
+
+/// Masked input: typed characters echo as `*`. Enter accepts.
+pub func password(msg: str) -> str {
+    line.password(msg, "*")
+}
+
+/// Masked input with a custom mask character.
+pub func password_mask(msg: str, mask: str) -> str {
+    line.password(msg, mask)
+}
+
+/// Yes/no prompt. Hint follows the default (`[Y/n]` / `[y/N]`).
+/// y/n or Enter answers; other keys are ignored.
+pub func confirm(msg: str, def: bool) -> bool {
+    cf.confirm(msg, def, "")
+}
+
+/// Yes/no prompt with a custom hint label.
+pub func confirm_hint(msg: str, def: bool, hint: str) -> bool {
+    cf.confirm(msg, def, hint)
+}
+
+/// Single choice menu: Up/Down (or k/j) moves, Enter accepts.
+// Returns the chosen option string ("" when `options` is empty).
+pub func select(msg: str, options: [str]) -> str {
+    sel.select(msg, options)
+}
+
+/// Multi-select menu: Up/Down moves, Space toggles `[x]`/`[ ]`,
+/// Enter confirms. Returns the selected option strings.
+pub func multi_select(msg: str, options: [str]) -> [str] {
+    sel.multi_select(msg, options)
+}

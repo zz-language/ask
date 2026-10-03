@@ -1,0 +1,63 @@
+// confirm.zz — yes/no prompt with a default and one-key answers.
+import std.process
+import std.term
+import ansi
+import fallback
+import keys
+
+/// Restore the terminal and terminate with code 130 (Ctrl+C).
+func die() -> bool {
+    ansi.restore()
+    process.exit(130)
+    false
+}
+
+/// Confirmation prompt. The hint follows the default (`[Y/n]` when
+/// `def` is true, `[y/N]` otherwise) unless `hint` overrides it.
+/// Accepts y/n (either case) or Enter for the default; other keys are
+/// ignored. Returns the chosen boolean.
+pub func confirm(msg: str, def: bool, hint: str) -> bool {
+    h := hint
+    if h == "" {
+        h = "[Y/n]"
+        if def == false {
+            h = "[y/N]"
+        }
+    }
+    if term.is_tty() == false {
+        return fallback.confirm("{msg} {h}", def)
+    }
+    match term.enable_raw() {
+        .ok(_) => 0
+        .err(_) => {
+            return fallback.confirm("{msg} {h}", def)
+        }
+    }
+    print("{msg} {h} ")
+    term.flush()
+    out := def
+    got := false
+    while got == false {
+        k := keys.next()
+        if k == keys.KEY_EOF {
+            got = true
+        } else if k == keys.KEY_CTRL_C {
+            return die()
+        } else if k == keys.KEY_ENTER {
+            got = true
+        } else if k == 121 || k == 89 {
+            out = true
+            got = true
+        } else if k == 110 || k == 78 {
+            out = false
+            got = true
+        }
+    }
+    ansi.restore()
+    if out {
+        ansi.answer("{msg} {h}", "yes")
+    } else {
+        ansi.answer("{msg} {h}", "no")
+    }
+    out
+}

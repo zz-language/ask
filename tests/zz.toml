@@ -1,0 +1,18 @@
+[package]
+name = "ask-tests"
+version = "0.1.0"
+
+[dependencies.ask]
+path = ".."
+
+# Internal modules mapped for white-box unit tests (keys_test,
+# buf_test, fallback_test). Path deps resolve `import <name>` to
+# `<dir>/<name>.zz` with no manifest required in the target dir.
+[dependencies.buf]
+path = "../src"
+
+[dependencies.keys]
+path = "../src"
+
+[dependencies.fallback]
+path = "../src"

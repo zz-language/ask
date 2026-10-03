@@ -1,0 +1,60 @@
+// ansi.zz — cursor shapes, visibility, block erasing, final answer lines.
+//
+// Every helper flushes stdout (`term.flush`) because interactive renders
+// carry no trailing newline and `print` alone never flushes.
+import std.colors
+import std.term
+
+/// Hide the terminal cursor (menus).
+pub func hide() {
+    print("\x1b[?25l")
+    term.flush()
+}
+
+/// Restore the terminal cursor.
+pub func show() {
+    print("\x1b[?25h")
+    term.flush()
+}
+
+/// Steady bar cursor for line editing (spec: `\x1b[5q`).
+pub func bar() {
+    print("\x1b[5q")
+    term.flush()
+}
+
+/// Reset cursor shape to the terminal default (spec: `\x1b[0q`).
+pub func reset_shape() {
+    print("\x1b[0q")
+    term.flush()
+}
+
+/// Move up `lines` rows and erase everything below the cursor.
+/// Used to collapse a finished menu into one clean answer line.
+pub func wipe(lines: int) {
+    if lines <= 0 {
+        return
+    }
+    print("\x1b[{lines}A\x1b[J")
+    term.flush()
+}
+
+/// Print the collapsed result line: `? <msg> <answer>` (msg bold,
+// answer green) and leave the cursor on the next line.
+pub func answer(msg: str, val: str) {
+    print("\r\x1b[K? ")
+    print(colors.bold(msg))
+    print(" ")
+    println(colors.green(val))
+}
+
+/// Restore a prompt to a safe terminal state: cooked mode back on,
+/// cursor visible, default shape. Safe to call unconditionally.
+pub func restore() {
+    match term.disable_raw() {
+        .ok(_) => 0
+        .err(_) => 0
+    }
+    show()
+    reset_shape()
+}

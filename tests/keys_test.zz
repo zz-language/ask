@@ -1,0 +1,33 @@
+// keys_test.zz — unit tests for escape-sequence decoding (pure, no TTY).
+import keys
+
+@test
+func test_decode_arrows() {
+    assert_eq(keys.decode_csi(65), keys.KEY_UP)
+    assert_eq(keys.decode_csi(66), keys.KEY_DOWN)
+    assert_eq(keys.decode_csi(67), keys.KEY_RIGHT)
+    assert_eq(keys.decode_csi(68), keys.KEY_LEFT)
+}
+
+@test
+func test_decode_home_end() {
+    assert_eq(keys.decode_csi(72), keys.KEY_HOME)
+    assert_eq(keys.decode_csi(70), keys.KEY_END)
+    assert_eq(keys.decode_tilde(1), keys.KEY_HOME)
+    assert_eq(keys.decode_tilde(3), keys.KEY_DELETE)
+    assert_eq(keys.decode_tilde(4), keys.KEY_END)
+}
+
+@test
+func test_decode_passthrough() {
+    assert_eq(keys.decode_csi(90), 90)
+    assert_eq(keys.decode_tilde(9), 9)
+}
+
+@test
+func test_key_codes_distinct() {
+    assert(keys.KEY_LEFT != keys.KEY_RIGHT)
+    assert(keys.KEY_UP != keys.KEY_DOWN)
+    assert(keys.KEY_HOME != keys.KEY_END)
+    assert(keys.KEY_ENTER != keys.KEY_SPACE)
+}

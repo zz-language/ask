@@ -1,0 +1,200 @@
+// select.zz — arrow-key menus: single choice and multi-select.
+//
+// Rendering model: the whole block (header + one line per option) is
+// printed, then every navigation key wipes the block (`ansi.wipe`) and
+// reprints it. On accept the block collapses to one answer line.
+// j/k work alongside Up/Down; Ctrl+C restores and exits(130).
+import std.colors
+import std.process
+import std.term
+import std.vec
+import ansi
+import fallback
+import keys
+
+/// Restore the terminal and terminate with code 130 (Ctrl+C).
+func die_str() -> str {
+    ansi.restore()
+    process.exit(130)
+    ""
+}
+
+/// Restore the terminal and terminate with code 130 (Ctrl+C).
+func die_arr() -> [str] {
+    ansi.restore()
+    process.exit(130)
+    []
+}
+
+/// True when stdin can do raw interactive menus.
+func live() -> bool {
+    if term.is_tty() == false {
+        return false
+    }
+    match term.enable_raw() {
+        .ok(_) => true
+        .err(_) => false
+    }
+}
+
+/// One menu row: `>` + bold green when active, blank prefix otherwise.
+func row(opt: str, active: bool) -> str {
+    if active {
+        return "> " + colors.bold(colors.green(opt))
+    }
+    "  " + opt
+}
+
+/// One multi-select row with checkbox plus cursor marker.
+func mrow(opt: str, active: bool, checked: bool) -> str {
+    box := "[ ]"
+    if checked {
+        box = "[x]"
+    }
+    if active {
+        return "> " + box + " " + colors.bold(colors.green(opt))
+    }
+    "  " + box + " " + opt
+}
+
+/// Print the header plus all rows (cursor ends on the line below).
+/// NOTE: lines end with explicit `\r\n` — raw mode disables OPOST, so a
+/// bare `\n` (println) would staircase down without returning the
+/// carriage (each redraw drifting further right).
+func draw(msg: str, rows: [str]) {
+    print("? " + colors.bold(msg) + "\r\n")
+    for r in rows {
+        print(r + "\r\n")
+    }
+    term.flush()
+}
+
+/// Build single-select rows for `options` with `idx` highlighted.
+func srows(options: [str], idx: int) -> [str] {
+    out: [str] = []
+    i := 0
+    for opt in options {
+        if i == idx {
+            out = vec.push(out, row(opt, true))
+        } else {
+            out = vec.push(out, row(opt, false))
+        }
+        i = i + 1
+    }
+    out
+}
+
+/// Interactive single select: Up/Down (or k/j) moves, Enter accepts.
+/// Returns the chosen option string.
+pub func select(msg: str, options: [str]) -> str {
+    n := vec.len(options)
+    if n == 0 {
+        return ""
+    }
+    if live() == false {
+        return fallback.pick(msg, options)
+    }
+    ansi.hide()
+    idx := 0
+    draw(msg, srows(options, idx))
+    stop := false
+    while stop == false {
+        k := keys.next()
+        if k == keys.KEY_EOF {
+            stop = true
+        } else if k == keys.KEY_CTRL_C {
+            return die_str()
+        } else if k == keys.KEY_ENTER {
+            stop = true
+        } else if k == keys.KEY_UP || k == 107 {
+            idx = (idx + n - 1) % n
+            ansi.wipe(n + 1)
+            draw(msg, srows(options, idx))
+        } else if k == keys.KEY_DOWN || k == 106 {
+            idx = (idx + 1) % n
+            ansi.wipe(n + 1)
+            draw(msg, srows(options, idx))
+        }
+    }
+    ansi.restore()
+    ansi.wipe(n + 1)
+    ansi.answer(msg, options[idx])
+    options[idx]
+}
+
+/// Build multi-select rows for `options` with cursor `idx`.
+func mrows(options: [str], idx: int, checked: [bool]) -> [str] {
+    out: [str] = []
+    i := 0
+    for opt in options {
+        if i == idx {
+            out = vec.push(out, mrow(opt, true, checked[i]))
+        } else {
+            out = vec.push(out, mrow(opt, false, checked[i]))
+        }
+        i = i + 1
+    }
+    out
+}
+
+/// Collect the checked option strings.
+func chosen(options: [str], checked: [bool]) -> [str] {
+    out: [str] = []
+    i := 0
+    for opt in options {
+        if checked[i] {
+            out = vec.push(out, opt)
+        }
+        i = i + 1
+    }
+    out
+}
+
+/// Interactive multi-select: Up/Down moves, Space toggles `[x]`/`[ ]`,
+/// Enter confirms. Returns the selected option strings (maybe empty).
+pub func multi_select(msg: str, options: [str]) -> [str] {
+    n := vec.len(options)
+    if n == 0 {
+        return []
+    }
+    if live() == false {
+        return fallback.picks(msg, options)
+    }
+    ansi.hide()
+    idx := 0
+    checked: [bool] = []
+    i := 0
+    while i < n {
+        checked = vec.push(checked, false)
+        i = i + 1
+    }
+    draw(msg, mrows(options, idx, checked))
+    stop := false
+    while stop == false {
+        k := keys.next()
+        if k == keys.KEY_EOF {
+            stop = true
+        } else if k == keys.KEY_CTRL_C {
+            return die_arr()
+        } else if k == keys.KEY_ENTER {
+            stop = true
+        } else if k == keys.KEY_SPACE {
+            checked[idx] = !checked[idx]
+            ansi.wipe(n + 1)
+            draw(msg, mrows(options, idx, checked))
+        } else if k == keys.KEY_UP || k == 107 {
+            idx = (idx + n - 1) % n
+            ansi.wipe(n + 1)
+            draw(msg, mrows(options, idx, checked))
+        } else if k == keys.KEY_DOWN || k == 106 {
+            idx = (idx + 1) % n
+            ansi.wipe(n + 1)
+            draw(msg, mrows(options, idx, checked))
+        }
+    }
+    ansi.restore()
+    ansi.wipe(n + 1)
+    got := chosen(options, checked)
+    ansi.answer(msg, vec.join(got, ", "))
+    got
+}

@@ -1,0 +1,9 @@
+[package]
+name = "ask"
+version = "0.1.0"
+description = "Advanced interactive CLI prompts, pure ZZ, zero dependencies. Line editing, confirm, password, single/multi select."
+license = "MIT"
+category = "utilities"
+keywords = ["prompt", "cli", "interactive", "input", "terminal", "tui"]
+
+[dependencies]

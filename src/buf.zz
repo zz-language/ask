@@ -1,0 +1,93 @@
+// buf.zz — editable line buffer: chars plus a cursor position.
+//
+// Value semantics: every edit returns a new Line, callers re-bind
+// (`b = b.insert(ch)`). Pure and fully unit-testable (no I/O).
+import std.str
+import std.vec
+
+pub struct Line {
+    chars: [str],
+    cursor: int,
+}
+
+/// Empty buffer, cursor at zero.
+pub func blank() -> Line {
+    Line{ chars: [], cursor: 0 }
+}
+
+/// Buffer pre-filled with `s`, cursor at the end.
+/// `str.split(s, "")` yields empty padding entries — filter them so
+/// every element is exactly one visible character.
+pub func from(s: str) -> Line {
+    raw := str.split(s, "")
+    out: [str] = []
+    for c in raw {
+        if c != "" {
+            out = vec.push(out, c)
+        }
+    }
+    Line{ chars: out, cursor: vec.len(out) }
+}
+
+impl Line {
+    /// Number of characters in the buffer.
+    pub func size(self) -> int {
+        vec.len(self.chars)
+    }
+
+    /// Insert `ch` at the cursor and step right.
+    pub func insert(self, ch: str) -> Line {
+        Line{ chars: vec.insert(self.chars, self.cursor, ch), cursor: self.cursor + 1 }
+    }
+
+    /// Delete the character left of the cursor (Backspace).
+    pub func backspace(self) -> Line {
+        if self.cursor <= 0 {
+            return self
+        }
+        Line{ chars: vec.remove(self.chars, self.cursor - 1), cursor: self.cursor - 1 }
+    }
+
+    /// Delete the character under the cursor (Delete key).
+    pub func delete_at(self) -> Line {
+        if self.cursor >= vec.len(self.chars) {
+            return self
+        }
+        Line{ chars: vec.remove(self.chars, self.cursor), cursor: self.cursor }
+    }
+
+    /// Step the cursor left (clamped at zero).
+    pub func left(self) -> Line {
+        if self.cursor <= 0 {
+            return self
+        }
+        Line{ chars: self.chars, cursor: self.cursor - 1 }
+    }
+
+    /// Step the cursor right (clamped at the end).
+    pub func right(self) -> Line {
+        if self.cursor >= vec.len(self.chars) {
+            return self
+        }
+        Line{ chars: self.chars, cursor: self.cursor + 1 }
+    }
+
+    /// Jump to the start of the line.
+    pub func home(self) -> Line {
+        Line{ chars: self.chars, cursor: 0 }
+    }
+
+    /// Jump to the end of the line.
+    pub func end(self) -> Line {
+        Line{ chars: self.chars, cursor: vec.len(self.chars) }
+    }
+
+    /// The plain buffer contents.
+    pub func text(self) -> str {
+        out := ""
+        for c in self.chars {
+            out = out + c
+        }
+        out
+    }
+}
