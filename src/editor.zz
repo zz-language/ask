@@ -39,9 +39,30 @@ pub func editor_bin() -> str {
     "vi"
 }
 
+/// True on Windows (editor launches without /dev/tty there).
+pub func is_windows() -> bool {
+    env.os() == "windows"
+}
+
+/// Build the child argv that gives the editor the real terminal.
+///
+/// `process.run` inherits stdin but always pipes stdout/stderr, so a
+/// TUI editor launched directly draws into a void and looks frozen.
+/// On unix the editor is exec'd through `sh`, redirecting all three
+/// standard fds to /dev/tty (the positional params dodge every
+/// quoting problem, even spaces in $TMPDIR). Windows has no
+/// /dev/tty — GUI editors don't need a console, so run direct.
+pub func edit_argv(bin: str, path: str) -> [str] {
+    if is_windows() {
+        return [bin, path]
+    }
+    ["sh", "-c", "exec \"$@\" </dev/tty >/dev/tty 2>&1", "ask", bin, path]
+}
+
 /// Run the editor on `path`: true when it exits zero.
 pub func edit_file(path: str, bin: str) -> bool {
-    match process.run(bin, [path]) {
+    argv := edit_argv(bin, path)
+    match process.run(argv[0], argv[1:]) {
         .ok(t) => t[0] == 0
         .err(_) => false
     }

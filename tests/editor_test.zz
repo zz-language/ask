@@ -5,6 +5,22 @@
 // runs instead.
 import editor
 
+/// Unix argv hands the editor the real terminal (TUI draws into a
+/// void when launched directly: `process.run` pipes child stdout).
+/// Windows runs direct (no /dev/tty; GUI editors need no console).
+@test
+func test_edit_argv_shape() {
+    argv := editor.edit_argv("nvim", "/tmp/x.txt")
+    if editor.is_windows() {
+        assert_eq(argv, ["nvim", "/tmp/x.txt"])
+    } else {
+        assert_eq(len(argv), 6)
+        assert_eq(argv[0], "sh")
+        assert_eq(argv[4], "nvim")
+        assert_eq(argv[5], "/tmp/x.txt")
+    }
+}
+
 @test
 func test_chomp_newline() {
     assert_eq(editor.chomp("a\n"), "a")

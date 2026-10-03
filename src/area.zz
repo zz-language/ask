@@ -290,7 +290,8 @@ pub func area(msg: str, default: str, rows: int) -> str {
         win = 5
     }
     w := width()
-    ansi.hide()
+    ansi.show()
+    ansi.bar()
     d := doc_new(default)
     chunks := wrap_chunks(d.lines, w)
     pos := cursor_at(d.lines, d.li, d.col, w)

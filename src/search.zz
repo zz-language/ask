@@ -114,7 +114,8 @@ pub func search(msg: str, options: [str]) -> str {
     if live() == false {
         return fallback.pick(msg + " (filter)", options)
     }
-    ansi.hide()
+    ansi.show()
+    ansi.bar()
     q := buf.blank()
     idx := 0
     hits := filter_options("", options)
