@@ -42,7 +42,10 @@ feats := ask.multi_select("Features:", ["logs", "cache", "tls"])
 | `ask.area(msg, default, rows)` | Multi-line area: arrows, Enter splits, Tab indents, Ctrl+D accepts, Esc cancels. Scrolling window, soft wrap. |
 | `ask.set_theme(name)` / `ask.theme_names()` | Switch look: "default", "mono", "ocean". `ASK_THEME` env and any `NO_COLOR` presence honored too. |
 | `ask.field_text/password/confirm/select/number(...)` | Field builders for `form`. |
-| `ask.form(title, fields)` | Multi-field screen: Up/Down moves, typing edits, Enter toggles confirm / advances, Left/Right cycles select, Tab advances, Enter-last or Ctrl+D submits, Esc cancels. Answers as `[str]`. |
+| `ask.form(title, fields)` | Multi-field screen: arrows move freely, typing edits, Enter toggles confirm / advances, Left/Right cycles select, invalid numbers gate submit only, Ctrl+D submits, Esc cancels. Answers as `[str]`. |
+| `ask.password2(msg)` / `ask.password2_mask(msg, mask)` | Type-twice secret, loops until both entries match. |
+| `ask.date(msg, default)` | Month-grid calendar: arrows move days/weeks, `[]`/PgUp/PgDn change months, Enter accepts ISO date, Esc cancels. |
+| `ask.browse(start)` | File browser: arrows move, Enter descends/accepts, Backspace goes up, Ctrl+D picks the directory, q/Esc cancels. Dotfiles hidden. |
 
 Every prompt hides/shows the cursor as needed, restores cooked mode +
 cursor shape on exit, treats Ctrl+C as cleanup + `exit(130)`, and
