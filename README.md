@@ -3,6 +3,16 @@
 Advanced interactive CLI prompts for ZZ. Pure ZZ, zero dependencies
 (only `std` modules: `colors`, `process`, `str`, `term`, `vec`).
 
+## Install
+
+```sh
+zz add ask
+```
+
+Requires a `zz` toolchain with `std.term` (raw mode, single-key
+reads). Older toolchains fail at `import std.term` — upgrade `zz`
+first.
+
 ```zz
 import ask
 
@@ -56,11 +66,6 @@ tests/             `zz test` — strictly stdin-free, passes on any terminal
 `tests/`, import only the public package (plus `buf`/`keys`/`fallback`
 via path deps for white-box parser/buffer coverage).
 
-## Requirements
-
-Needs a `zz` toolchain with `std.term` (raw mode, single-key reads).
-Older toolchains fail at `import std.term` — upgrade `zz` first.
-
 ## Tests
 
 From `tests/` (no input needed, safe on any terminal):
@@ -72,3 +77,10 @@ zz install && zz test
 Raw TTY behavior is verified through `examples/demo.zz`
 (`cd examples && zz install && zz run demo.zz`) — piped runs exercise
 the fallbacks, a real terminal exercises raw mode.
+
+## Published
+
+`ask v0.1.0` is live on the registry
+(`https://zz-registry.onrender.com/pkg/ask`) — installable with
+`zz add ask`. Republish a new version with `zz publish` from the
+package root (runs the test suite, packs, and uploads).
