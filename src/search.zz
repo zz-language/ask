@@ -66,18 +66,19 @@ func srow(opt: str, active: bool) -> str {
 }
 
 /// Print the filter row plus `rows`, then park the cursor back inside
-/// the query: rows end with `\r\n` (raw mode kills ONLCR), so move up
-/// past them and step right over prompt + cursor offset.
+/// the query. The prompt row is ended explicitly (draw_input emits no
+/// newline — without it the first row glues onto the prompt), rows end
+/// with `\r\n` (raw mode kills ONLCR), then climb `1 + rows` back to
+/// the prompt and step right over "? " + msg + " " + query offset.
 func draw(msg: str, q: buf.Line, rows: [str]) {
     line.draw_input("? {msg} ", q, false, "*")
+    print("\r\n")
     for r in rows {
         print(r + "\r\n")
     }
-    up := vec.len(rows)
-    if up > 0 {
-        print("\x1b[{up}A")
-    }
-    fwd := len(msg) + 2 + q.cursor
+    up := 1 + vec.len(rows)
+    print("\x1b[{up}A")
+    fwd := len(msg) + 3 + q.cursor
     print("\r\x1b[{fwd}C")
     term.flush()
 }
