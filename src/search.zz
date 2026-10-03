@@ -2,8 +2,11 @@
 //
 // Layout: one filter input row (borrowed line editor, cursor parked in
 // the query) plus up to SEARCH_ROWS matches below. Every keystroke
-// wipes the block and reprints it. Up/Down moves in the filtered list,
-// Enter accepts the highlight, Esc cancels with "", Ctrl+C exits(130).
+// erases from the prompt line down (`ansi.wipe_down`) and reprints —
+// never an upward wipe, because the cursor rests on the FIRST block
+// line, not below it (an upward wipe from there would eat scrollback).
+// Up/Down moves in the filtered list, Enter accepts the highlight,
+// Esc cancels with "", Ctrl+C exits(130).
 import std.colors
 import std.process
 import std.term
@@ -117,7 +120,6 @@ pub func search(msg: str, options: [str]) -> str {
     hits := filter_options("", options)
     rows := vis_rows(hits, idx)
     draw(msg, q, rows)
-    total := 1 + vec.len(rows)
     stop := false
     while stop == false {
         k := keys.next()
@@ -129,23 +131,21 @@ pub func search(msg: str, options: [str]) -> str {
             stop = true
         } else if k == keys.KEY_ESC {
             ansi.restore()
-            ansi.wipe(total)
+            ansi.wipe_down()
             ansi.answer(msg, "(cancelled)")
             return ""
         } else if k == keys.KEY_UP || k == 107 {
             if vec.len(hits) > 0 {
                 idx = (idx + vec.len(hits) - 1) % vec.len(hits)
                 rows = vis_rows(hits, idx)
-                ansi.wipe(total)
-                total = 1 + vec.len(rows)
+                ansi.wipe_down()
                 draw(msg, q, rows)
             }
         } else if k == keys.KEY_DOWN || k == 106 {
             if vec.len(hits) > 0 {
                 idx = (idx + 1) % vec.len(hits)
                 rows = vis_rows(hits, idx)
-                ansi.wipe(total)
-                total = 1 + vec.len(rows)
+                ansi.wipe_down()
                 draw(msg, q, rows)
             }
         } else if k == keys.KEY_BACKSPACE || k == 8 {
@@ -153,21 +153,19 @@ pub func search(msg: str, options: [str]) -> str {
             hits = filter_options(q.text(), options)
             idx = 0
             rows = vis_rows(hits, idx)
-            ansi.wipe(total)
-            total = 1 + vec.len(rows)
+            ansi.wipe_down()
             draw(msg, q, rows)
         } else if k >= 32 && k <= 126 {
             q = q.insert(line.glyph(k))
             hits = filter_options(q.text(), options)
             idx = 0
             rows = vis_rows(hits, idx)
-            ansi.wipe(total)
-            total = 1 + vec.len(rows)
+            ansi.wipe_down()
             draw(msg, q, rows)
         }
     }
     ansi.restore()
-    ansi.wipe(total)
+    ansi.wipe_down()
     if vec.len(hits) == 0 {
         ansi.answer(msg, "(none)")
         return ""

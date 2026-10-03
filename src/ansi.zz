@@ -30,12 +30,34 @@ pub func reset_shape() {
 }
 
 /// Move up `lines` rows and erase everything below the cursor.
-/// Used to collapse a finished menu into one clean answer line.
+/// Only correct when the cursor sits BELOW the block (e.g. `select`,
+/// whose draws end with a newline). When the cursor rests inside the
+/// block (`search`, `area`), use `wipe_down` instead — moving up from
+/// mid-block erases unrelated lines above the menu.
 pub func wipe(lines: int) {
     if lines <= 0 {
         return
     }
     print("\x1b[{lines}A\x1b[J")
+    term.flush()
+}
+
+/// Erase the current line from column 0 to the end of the screen.
+/// Correct when the cursor sits on the FIRST line of the block being
+/// redrawn: no upward move, so lines above are never touched.
+pub func wipe_down() {
+    print("\r\x1b[J")
+    term.flush()
+}
+
+/// Move up `n` rows without erasing (callers follow with `wipe_down`).
+/// Used when the cursor rests mid-block: climb back to the header
+/// first, so the erase below never reaches above the menu.
+pub func up_lines(n: int) {
+    if n <= 0 {
+        return
+    }
+    print("\x1b[{n}A")
     term.flush()
 }
 

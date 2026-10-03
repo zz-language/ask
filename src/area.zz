@@ -254,9 +254,9 @@ func width() -> int {
     }
 }
 
-/// Print the header plus the visible window, then park the cursor.
-/// `total` counts every display row including the header.
-func draw(msg: str, chunks: [str], off: int, total: int, crow: int, ccol: int, w: int) {
+/// Print the header plus the `win`-tall visible window, then park the
+/// cursor. Cursor display row is `1 + (crow - off)` (header is row 0).
+func draw(msg: str, chunks: [str], off: int, win: int, crow: int, ccol: int, w: int) {
     h := "? {msg} (^D done, esc cancels)"
     if len(h) > w {
         h = h[:w]
@@ -264,7 +264,7 @@ func draw(msg: str, chunks: [str], off: int, total: int, crow: int, ccol: int, w
     print(h + "\r\n")
     i := off
     shown := 0
-    while i < vec.len(chunks) && shown < total - 1 {
+    while i < vec.len(chunks) && shown < win {
         print(chunks[i] + "\r\n")
         i = i + 1
         shown = shown + 1
@@ -298,8 +298,8 @@ pub func area(msg: str, default: str, rows: int) -> str {
     if off < 0 {
         off = 0
     }
-    total := 1 + vec.len(chunks)
-    draw(msg, chunks, off, total, pos[0], pos[1], w)
+    draw(msg, chunks, off, win, pos[0], pos[1], w)
+    prev := 1 + (pos[0] - off)
     stop := false
     cancelled := false
     while stop == false {
@@ -336,20 +336,24 @@ pub func area(msg: str, default: str, rows: int) -> str {
         } else {
             continue
         }
-        chunks = wrap_chunks(d.lines, w)
-        pos = cursor_at(d.lines, d.li, d.col, w)
-        if pos[0] < off {
-            off = pos[0]
+        if stop == false {
+            ansi.up_lines(prev)
+            ansi.wipe_down()
+            chunks = wrap_chunks(d.lines, w)
+            pos = cursor_at(d.lines, d.li, d.col, w)
+            if pos[0] < off {
+                off = pos[0]
+            }
+            if pos[0] >= off + win {
+                off = pos[0] - win + 1
+            }
+            draw(msg, chunks, off, win, pos[0], pos[1], w)
+            prev = 1 + (pos[0] - off)
         }
-        if pos[0] >= off + win {
-            off = pos[0] - win + 1
-        }
-        ansi.wipe(total)
-        total = 1 + vec.len(chunks)
-        draw(msg, chunks, off, total, pos[0], pos[1], w)
     }
     ansi.restore()
-    ansi.wipe(total)
+    ansi.up_lines(prev)
+    ansi.wipe_down()
     if cancelled {
         ansi.answer(msg, "(cancelled)")
         return ""
