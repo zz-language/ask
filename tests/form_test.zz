@@ -1,0 +1,68 @@
+// form_test.zz — unit tests for form helpers (pure, no TTY).
+//
+// `run()` drives the screen, so only constructors, display helpers,
+// and number gating are pinned here; interactive flows go through
+// `examples/demo.zz` (piped) and manual TTY runs.
+import form
+
+@test
+func test_field_constructors() {
+    t := form.field_text("Name:", "ada")
+    assert_eq(t.kind, "text")
+    assert_eq(t.def, "ada")
+    p := form.field_password("PW:")
+    assert_eq(p.kind, "password")
+    c := form.field_confirm("Go?", true)
+    assert_eq(c.kind, "confirm")
+    assert_eq(c.def, "true")
+    s := form.field_select("Sh:", ["a", "b"])
+    assert_eq(s.kind, "select")
+    assert_eq(len(s.opts), 2)
+    n := form.field_number("Age:", 30, 1, 120)
+    assert_eq(n.kind, "number")
+    assert_eq(n.def, "30")
+    assert_eq(n.lo, 1)
+    assert_eq(n.hi, 120)
+}
+
+@test
+func test_shorten_truncates() {
+    assert_eq(form.shorten("abcdef", 5), "ab...")
+    assert_eq(form.shorten("abc", 5), "abc")
+}
+
+@test
+func test_mask_str_counts() {
+    assert_eq(form.mask_str("*", 3), "***")
+    assert_eq(form.mask_str("#", 0), "")
+}
+
+@test
+func test_disp_text_empty() {
+    assert_eq(form.disp_text(""), "(empty)")
+    assert_eq(form.disp_text("hi"), "hi")
+}
+
+@test
+func test_disp_select_shapes() {
+    s := form.field_select("Sh:", ["a", "b"])
+    assert_eq(form.disp_select(s, 1), "b")
+    e := form.field_select("Sh:", [])
+    assert_eq(form.disp_select(e, 0), "(no options)")
+}
+
+@test
+func test_first_bad_finds_number() {
+    fs := [form.field_text("N:", ""), form.field_number("A:", 30, 1, 120)]
+    assert_eq(form.first_bad(fs, ["x", "25"]), -1)
+    assert_eq(form.first_bad(fs, ["x", "nope"]), 1)
+    assert_eq(form.first_bad(fs, ["x", "999"]), 1)
+}
+
+@test
+func test_num_bad_single() {
+    fs := [form.field_number("A:", 30, 1, 120), form.field_text("N:", "")]
+    assert(form.num_bad(fs, ["5", "x"], 0) == false)
+    assert(form.num_bad(fs, ["bad", "x"], 0))
+    assert(form.num_bad(fs, ["5", "x"], 1) == false)
+}

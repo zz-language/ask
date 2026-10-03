@@ -34,3 +34,9 @@ path = "../src"
 
 [dependencies.confirm]
 path = "../src"
+
+[dependencies.form]
+path = "../src"
+
+[dependencies.theme]
+path = "../src"

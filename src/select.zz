@@ -4,13 +4,13 @@
 // printed, then every navigation key wipes the block (`ansi.wipe`) and
 // reprints it. On accept the block collapses to one answer line.
 // j/k work alongside Up/Down; Ctrl+C restores and exits(130).
-import std.colors
 import std.process
 import std.term
 import std.vec
 import ansi
 import fallback
 import keys
+import theme
 
 /// Restore the terminal and terminate with code 130 (Ctrl+C).
 func die_str() -> str {
@@ -37,22 +37,24 @@ func live() -> bool {
     }
 }
 
-/// One menu row: `>` + bold green when active, blank prefix otherwise.
+/// One menu row: marker + accented label when active.
 func row(opt: str, active: bool) -> str {
+    t := theme.current()
     if active {
-        return "> " + colors.bold(colors.green(opt))
+        return t.marker + theme.paint(t, "bold", theme.paint(t, t.accent, opt))
     }
     "  " + opt
 }
 
 /// One multi-select row with checkbox plus cursor marker.
 func mrow(opt: str, active: bool, checked: bool) -> str {
-    box := "[ ]"
+    t := theme.current()
+    box := t.box_off
     if checked {
-        box = "[x]"
+        box = t.box_on
     }
     if active {
-        return "> " + box + " " + colors.bold(colors.green(opt))
+        return t.marker + box + " " + theme.paint(t, "bold", theme.paint(t, t.accent, opt))
     }
     "  " + box + " " + opt
 }
@@ -62,7 +64,7 @@ func mrow(opt: str, active: bool, checked: bool) -> str {
 /// bare `\n` (println) would staircase down without returning the
 /// carriage (each redraw drifting further right).
 func draw(msg: str, rows: [str]) {
-    print("? " + colors.bold(msg) + "\r\n")
+    print(theme.headline(theme.current(), msg) + "\r\n")
     for r in rows {
         print(r + "\r\n")
     }

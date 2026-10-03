@@ -4,7 +4,6 @@
 // cursor navigation (Left/Right/Home/End), Backspace/Delete relative to
 // the cursor, printable ASCII insertion. Ctrl+C restores the terminal
 // and exits(130); EOF accepts the current buffer.
-import std.colors
 import std.process
 import std.term
 import ansi
@@ -12,6 +11,7 @@ import buf
 import fallback
 import keys
 import path
+import theme
 
 /// Printable ASCII 32..126 indexed by (byte - 32).
 func glyphs() -> str {
@@ -128,7 +128,8 @@ pub func text(msg: str, default: str, validator: func(str) -> bool, err_msg: str
             ansi.answer(msg, val)
             return val
         }
-        println(colors.red(err_msg))
+        t := theme.current()
+        println(theme.paint(t, t.error, err_msg))
         cur_def = val
     }
     val

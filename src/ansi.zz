@@ -2,8 +2,8 @@
 //
 // Every helper flushes stdout (`term.flush`) because interactive renders
 // carry no trailing newline and `print` alone never flushes.
-import std.colors
 import std.term
+import theme
 
 /// Hide the terminal cursor (menus).
 pub func hide() {
@@ -14,6 +14,12 @@ pub func hide() {
 /// Restore the terminal cursor.
 pub func show() {
     print("\x1b[?25h")
+    term.flush()
+}
+
+/// Ring the terminal bell (validation nudges without layout churn).
+pub func bell() {
+    print("\x07")
     term.flush()
 }
 
@@ -61,13 +67,14 @@ pub func up_lines(n: int) {
     term.flush()
 }
 
-/// Print the collapsed result line: `? <msg> <answer>` (msg bold,
-// answer green) and leave the cursor on the next line.
+/// Print the collapsed result line: `<prefix><msg> <answer>` (msg
+/// bold, answer in the theme color) and leave the cursor next line.
 pub func answer(msg: str, val: str) {
-    print("\r\x1b[K? ")
-    print(colors.bold(msg))
+    t := theme.current()
+    print("\r\x1b[K" + t.prefix)
+    print(theme.paint(t, "bold", msg))
     print(" ")
-    println(colors.green(val))
+    println(theme.paint(t, t.answer, val))
 }
 
 /// Restore a prompt to a safe terminal state: cooked mode back on,

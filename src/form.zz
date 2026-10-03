@@ -1,0 +1,394 @@
+// form.zz — multi-field form on one screen.
+//
+// Every field edits INLINE on its own row (no nested prompts, so the
+// block height stays constant and one raw session covers everything):
+// text/number/password type into a buffer, confirm toggles with
+// Enter/Space/Left/Right, select cycles with Left/Right. Up/Down (or
+// k/j) moves, Tab (or Enter) accepts the row and advances, Enter on
+// the last row submits, Ctrl+D submits anywhere, Esc cancels ([]).
+// Non-TTY degrades to sequential single prompts.
+import std.process
+import std.str
+import std.term
+import std.vec
+import ansi
+import buf
+import confirm as cf
+import keys
+import line
+import number as num
+import select as sel
+import theme
+
+/// One form field. Build with `field_text` / `field_password` /
+/// `field_confirm` / `field_select` / `field_number` — never by hand.
+pub struct Field {
+    kind: str,
+    msg: str,
+    def: str,
+    opts: [str],
+    lo: int,
+    hi: int,
+}
+
+pub func field_text(msg: str, default: str) -> Field {
+    Field{ kind: "text", msg: msg, def: default, opts: [], lo: 0, hi: 0 }
+}
+
+pub func field_password(msg: str) -> Field {
+    Field{ kind: "password", msg: msg, def: "", opts: [], lo: 0, hi: 0 }
+}
+
+pub func field_confirm(msg: str, def: bool) -> Field {
+    d := "false"
+    if def {
+        d = "true"
+    }
+    Field{ kind: "confirm", msg: msg, def: d, opts: [], lo: 0, hi: 0 }
+}
+
+pub func field_select(msg: str, options: [str]) -> Field {
+    Field{ kind: "select", msg: msg, def: "", opts: options, lo: 0, hi: 0 }
+}
+
+pub func field_number(msg: str, default: int, lo: int, hi: int) -> Field {
+    Field{ kind: "number", msg: msg, def: str(default), lo: lo, hi: hi, opts: [] }
+}
+
+/// Truncate display values so rows stay single-line (pure).
+pub func shorten(s: str, n: int) -> str {
+    if len(s) <= n {
+        return s
+    }
+    s[:n - 3] + "..."
+}
+
+/// Masked echo of `n` characters (pure).
+pub func mask_str(mask: str, n: int) -> str {
+    out := ""
+    i := 0
+    while i < n {
+        out = out + mask
+        i = i + 1
+    }
+    out
+}
+
+/// Display value for a text row (pure).
+pub func disp_text(ans: str) -> str {
+    if ans == "" {
+        return "(empty)"
+    }
+    shorten(ans, 40)
+}
+
+/// Display value for a select row (pure).
+pub func disp_select(f: Field, at: int) -> str {
+    if vec.len(f.opts) == 0 {
+        return "(no options)"
+    }
+    shorten(f.opts[at], 40)
+}
+
+/// First field holding an invalid number, or -1 when all pass (pure).
+pub func first_bad(fields: [Field], answers: [str]) -> int {
+    i := 0
+    for f in fields {
+        if f.kind == "number" && num.in_range(answers[i], f.lo, f.hi) == false {
+            return i
+        }
+        i = i + 1
+    }
+    -1
+}
+
+/// True when field `i` is a number failing its range (pure).
+pub func num_bad(fields: [Field], answers: [str], i: int) -> bool {
+    f := fields[i]
+    if f.kind != "number" {
+        return false
+    }
+    num.in_range(answers[i], f.lo, f.hi) == false
+}
+
+/// Restore the terminal and terminate with code 130 (Ctrl+C).
+func die() -> [str] {
+    ansi.restore()
+    process.exit(130)
+    []
+}
+
+/// True when stdin can do raw interactive editing.
+func live() -> bool {
+    if term.is_tty() == false {
+        return false
+    }
+    match term.enable_raw() {
+        .ok(_) => true
+        .err(_) => false
+    }
+}
+
+/// Print the whole block (header + rows + hint), park the cursor on
+/// the active row. Block height is always 2 + n.
+func draw(title: str, rows: [str], idx: int, fwd: int) {
+    t := theme.current()
+    print(theme.headline(t, title) + "\r\n")
+    for r in rows {
+        print(r + "\r\n")
+    }
+    print(theme.paint(t, t.faint, "tab next • enter edit • ^D done • esc cancels") + "\r\n")
+    term.flush()
+    n := vec.len(rows)
+    up := (n + 1) - idx
+    if up > 0 {
+        print("\x1b[{up}A")
+    }
+    print("\r\x1b[{fwd}C")
+    term.flush()
+}
+
+/// Sequential fallback: one prompt per field, answers in order.
+func run_fallback(title: str, fields: [Field]) -> [str] {
+    println("? {title}")
+    out: [str] = []
+    any := |_s: str| true
+    for f in fields {
+        if f.kind == "text" {
+            out = vec.push(out, line.text(f.msg + ":", f.def, any, "x"))
+        } else if f.kind == "password" {
+            out = vec.push(out, line.password(f.msg + ":", "*"))
+        } else if f.kind == "confirm" {
+            d := f.def == "true"
+            v := cf.confirm(f.msg + ":", d, "")
+            if v {
+                out = vec.push(out, "true")
+            } else {
+                out = vec.push(out, "false")
+            }
+        } else if f.kind == "select" {
+            out = vec.push(out, sel.select(f.msg + ":", f.opts))
+        } else {
+            dflt := num.number(f.msg + ":", int(f.def) ?? f.lo, f.lo, f.hi)
+            out = vec.push(out, str(dflt))
+        }
+    }
+    out
+}
+
+func ring() {
+    ansi.bell()
+}
+
+func wipe_h(h: int) {
+    ansi.wipe(h)
+}
+
+/// Multi-field form. Returns answers as strings in field order
+/// (confirm yields "true"/"false"), or [] on Esc cancel.
+pub func run(title: str, fields: [Field]) -> [str] {
+    n := vec.len(fields)
+    if n == 0 {
+        return []
+    }
+    if live() == false {
+        return run_fallback(title, fields)
+    }
+    ansi.show()
+    ansi.bar()
+    answers: [str] = []
+    sels: [int] = []
+    bufs: [buf.Line] = []
+    i := 0
+    for f in fields {
+        if f.kind == "confirm" {
+            answers = vec.push(answers, f.def)
+        } else if f.kind == "select" {
+            first := ""
+            if vec.len(f.opts) > 0 {
+                first = f.opts[0]
+            }
+            answers = vec.push(answers, first)
+        } else {
+            answers = vec.push(answers, f.def)
+        }
+        sels = vec.push(sels, 0)
+        bufs = vec.push(bufs, buf.from(f.def))
+        i = i + 1
+    }
+    idx := 0
+    h := n + 2
+    stop := false
+    cancelled := false
+    while stop == false {
+        rows: [str] = []
+        fwd := 0
+        j := 0
+        for f in fields {
+            t := theme.current()
+            pre := "  "
+            if j == idx {
+                pre = t.marker
+            }
+            line_out := ""
+            if f.kind == "text" {
+                line_out = pre + theme.paint(t, "bold", f.msg) + ": " + disp_text(answers[j])
+            } else if f.kind == "password" {
+                shown := "(empty)"
+                if answers[j] != "" {
+                    shown = mask_str("*", len(answers[j]))
+                }
+                line_out = pre + theme.paint(t, "bold", f.msg) + ": " + shorten(shown, 40)
+            } else if f.kind == "confirm" {
+                line_out = pre + theme.paint(t, "bold", f.msg) + ": " + answers[j]
+            } else if f.kind == "select" {
+                line_out = pre + theme.paint(t, "bold", f.msg) + ": " + disp_select(f, sels[j])
+            } else {
+                line_out = pre + theme.paint(t, "bold", f.msg) + " [{f.lo}-{f.hi}]: " + disp_text(answers[j])
+            }
+            rows = vec.push(rows, line_out)
+            if j == idx {
+                fwd = len(pre) + len(f.msg) + 2 + bufs[j].cursor
+            }
+            j = j + 1
+        }
+        draw(title, rows, idx, fwd)
+        k := keys.next()
+        f := fields[idx]
+        if k == keys.KEY_EOF || k == 4 {
+            bad := first_bad(fields, answers)
+            if bad == -1 {
+                stop = true
+            }
+            if bad != -1 {
+                idx = bad
+                ring()
+            }
+        } else if k == keys.KEY_CTRL_C {
+            return die()
+        } else if k == keys.KEY_ESC {
+            cancelled = true
+            stop = true
+        } else if k == keys.KEY_UP || k == 107 {
+            idx = (idx + n - 1) % n
+        } else if k == keys.KEY_DOWN || k == 106 {
+            blocked := num_bad(fields, answers, idx)
+            if blocked {
+                ring()
+            }
+            if blocked == false {
+                idx = (idx + 1) % n
+            }
+        } else if k == keys.KEY_TAB {
+            blocked := num_bad(fields, answers, idx)
+            if blocked {
+                ring()
+            }
+            if blocked == false {
+                idx = (idx + 1) % n
+            }
+        } else if k == 90 {
+            idx = (idx + n - 1) % n
+        } else if k == keys.KEY_ENTER {
+            if f.kind == "confirm" {
+                if answers[idx] == "true" {
+                    answers[idx] = "false"
+                } else {
+                    answers[idx] = "true"
+                }
+            } else {
+                blocked := num_bad(fields, answers, idx)
+                if blocked {
+                    ring()
+                }
+                if blocked == false && idx == n - 1 {
+                    stop = true
+                }
+                if blocked == false && idx != n - 1 {
+                    idx = idx + 1
+                }
+            }
+        } else if k == 90 {
+            idx = (idx + n - 1) % n
+        } else if k == keys.KEY_LEFT {
+            if f.kind == "confirm" {
+                if answers[idx] == "true" {
+                    answers[idx] = "false"
+                } else {
+                    answers[idx] = "true"
+                }
+            } else if f.kind == "select" {
+                m := vec.len(f.opts)
+                if m > 0 {
+                    at := (sels[idx] - 1 + m) % m
+                    sels[idx] = at
+                    answers[idx] = f.opts[at]
+                }
+            } else {
+                bufs[idx] = bufs[idx].left()
+                answers[idx] = bufs[idx].text()
+            }
+        } else if k == keys.KEY_RIGHT {
+            if f.kind == "confirm" {
+                if answers[idx] == "true" {
+                    answers[idx] = "false"
+                } else {
+                    answers[idx] = "true"
+                }
+            } else if f.kind == "select" {
+                m := vec.len(f.opts)
+                if m > 0 {
+                    at := (sels[idx] + 1) % m
+                    sels[idx] = at
+                    answers[idx] = f.opts[at]
+                }
+            } else {
+                bufs[idx] = bufs[idx].right()
+                answers[idx] = bufs[idx].text()
+            }
+        } else if k == 32 && f.kind == "confirm" {
+            if answers[idx] == "true" {
+                answers[idx] = "false"
+            } else {
+                answers[idx] = "true"
+            }
+        } else if k == keys.KEY_HOME {
+            bufs[idx] = bufs[idx].home()
+            answers[idx] = bufs[idx].text()
+        } else if k == keys.KEY_END {
+            bufs[idx] = bufs[idx].end()
+            answers[idx] = bufs[idx].text()
+        } else if k == keys.KEY_BACKSPACE || k == 8 {
+            if f.kind == "text" || f.kind == "password" || f.kind == "number" {
+                bufs[idx] = bufs[idx].backspace()
+                answers[idx] = bufs[idx].text()
+            }
+        } else if k == keys.KEY_DELETE {
+            if f.kind == "text" || f.kind == "password" || f.kind == "number" {
+                bufs[idx] = bufs[idx].delete_at()
+                answers[idx] = bufs[idx].text()
+            }
+        } else if k >= 32 && k <= 126 {
+            if f.kind == "text" || f.kind == "password" {
+                bufs[idx] = bufs[idx].insert(line.glyph(k))
+                answers[idx] = bufs[idx].text()
+            } else if f.kind == "number" {
+                if k >= 48 && k <= 57 || k == 45 {
+                    bufs[idx] = bufs[idx].insert(line.glyph(k))
+                    answers[idx] = bufs[idx].text()
+                }
+            }
+        }
+        if stop == false {
+            wipe_h(h)
+        }
+    }
+    ansi.restore()
+    wipe_h(h)
+    if cancelled {
+        ansi.answer(title, "(cancelled)")
+        return []
+    }
+    ansi.answer(title, vec.join(answers, ", "))
+    answers
+}

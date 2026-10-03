@@ -40,6 +40,9 @@ feats := ask.multi_select("Features:", ["logs", "cache", "tls"])
 | `ask.editor(msg, default)` / `ask.editor_ext(msg, default, ext)` | Opens the editor on a tempfile (scratch `ext` for highlighting); returns saved contents. `VISUAL`/`EDITOR` may carry flags (quoted groups ok); GUI editors (`code`, `zed`, `subl`, …) gain `--wait` automatically; falls back to `vi`/`notepad`. TUI editors get the real terminal. Failed/aborted edits honestly report `(editor failed, kept default)` and keep the default. |
 | `ask.confirm_danger(msg, word)` / `ask.confirm_delete(msg)` | Must type `word` exactly (`DELETE`); anything else aborts `false`. |
 | `ask.area(msg, default, rows)` | Multi-line area: arrows, Enter splits, Tab indents, Ctrl+D accepts, Esc cancels. Scrolling window, soft wrap. |
+| `ask.set_theme(name)` / `ask.theme_names()` | Switch look: "default", "mono", "ocean". `ASK_THEME` env and any `NO_COLOR` presence honored too. |
+| `ask.field_text/password/confirm/select/number(...)` | Field builders for `form`. |
+| `ask.form(title, fields)` | Multi-field screen: Up/Down moves, typing edits, Enter toggles confirm / advances, Left/Right cycles select, Tab advances, Enter-last or Ctrl+D submits, Esc cancels. Answers as `[str]`. |
 
 Every prompt hides/shows the cursor as needed, restores cooked mode +
 cursor shape on exit, treats Ctrl+C as cleanup + `exit(130)`, and

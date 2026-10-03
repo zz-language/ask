@@ -7,7 +7,6 @@
 // line, not below it (an upward wipe from there would eat scrollback).
 // Up/Down moves in the filtered list, Enter accepts the highlight,
 // Esc cancels with "", Ctrl+C exits(130).
-import std.colors
 import std.process
 import std.term
 import std.vec
@@ -16,6 +15,7 @@ import buf
 import fallback
 import keys
 import line
+import theme
 
 /// Max matches shown under the filter row.
 pub const SEARCH_ROWS: int = 8
@@ -57,10 +57,11 @@ func live() -> bool {
     }
 }
 
-/// One match row: `>` + bold green on the highlight.
+/// One match row: marker + accented label on the highlight.
 func srow(opt: str, active: bool) -> str {
+    t := theme.current()
     if active {
-        return "> " + colors.bold(colors.green(opt))
+        return t.marker + theme.paint(t, "bold", theme.paint(t, t.accent, opt))
     }
     "  " + opt
 }
@@ -71,14 +72,15 @@ func srow(opt: str, active: bool) -> str {
 /// with `\r\n` (raw mode kills ONLCR), then climb `1 + rows` back to
 /// the prompt and step right over "? " + msg + " " + query offset.
 func draw(msg: str, q: buf.Line, rows: [str]) {
-    line.draw_input("? {msg} ", q, false, "*")
+    t := theme.current()
+    line.draw_input(theme.headline(t, msg) + " ", q, false, "*")
     print("\r\n")
     for r in rows {
         print(r + "\r\n")
     }
     up := 1 + vec.len(rows)
     print("\x1b[{up}A")
-    fwd := len(msg) + 3 + q.cursor
+    fwd := len(t.prefix) + len(msg) + 1 + q.cursor
     print("\r\x1b[{fwd}C")
     term.flush()
 }

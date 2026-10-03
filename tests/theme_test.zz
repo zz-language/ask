@@ -1,0 +1,45 @@
+// theme_test.zz — unit tests for themes (pure, no TTY).
+//
+// `current()` reads ambient env, so only explicit presets are pinned
+// here; env-driven selection is verified by hand
+// (`ASK_THEME=mono`, `NO_COLOR=1`).
+import theme
+
+@test
+func test_named_presets() {
+    assert_eq(theme.named("mono").name, "mono")
+    assert_eq(theme.named("ocean").name, "ocean")
+    assert_eq(theme.named("default").name, "default")
+    assert_eq(theme.named("nope").name, "default")
+}
+
+@test
+func test_names_lists_presets() {
+    got := theme.names()
+    assert_eq(len(got), 3)
+    assert_eq(got[0], "default")
+}
+
+@test
+func test_paint_colors() {
+    t := theme.def()
+    assert_eq(theme.paint(t, "red", "x"), "\x1b[31mx\x1b[0m")
+    assert_eq(theme.paint(t, "bold", "x"), "\x1b[1mx\x1b[0m")
+    assert_eq(theme.paint(t, "nope", "x"), "x")
+}
+
+@test
+func test_paint_mono_strips() {
+    t := theme.mono()
+    assert(t.plain)
+    assert_eq(theme.paint(t, "red", "x"), "x")
+    assert_eq(theme.paint(t, "bold", "x"), "x")
+}
+
+@test
+func test_headline_format() {
+    t := theme.def()
+    assert_eq(theme.headline(t, "Hi"), "? \x1b[1mHi\x1b[0m")
+    m := theme.mono()
+    assert_eq(theme.headline(m, "Hi"), "? Hi")
+}

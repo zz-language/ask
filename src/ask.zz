@@ -17,11 +17,13 @@
 // scripts and `zz test` keep working without a terminal.
 import confirm as cf
 import editor as ed
+import form as fm
 import line
 import number as num
 import search as sch
 import select as sel
 import area as ar
+import theme
 
 /// Text input with real-time line editing (arrows, Home/End,
 // Backspace/Delete, bar cursor). Retries until `validator` passes;
@@ -86,6 +88,51 @@ pub func confirm_delete(msg: str) -> bool {
 /// `rows`-tall window with soft wrapping. Returns the joined text.
 pub func area(msg: str, default: str, rows: int) -> str {
     ar.area(msg, default, rows)
+}
+
+/// Switch the visual theme mid-process: "default", "mono", "ocean".
+/// Also honored: `ASK_THEME` env, and any `NO_COLOR` presence.
+pub func set_theme(name: str) -> bool {
+    theme.set_theme(name)
+}
+
+/// Available theme names.
+pub func theme_names() -> [str] {
+    theme.names()
+}
+
+/// One text field for `form`.
+pub func field_text(msg: str, default: str) -> fm.Field {
+    fm.field_text(msg, default)
+}
+
+/// One masked field for `form`.
+pub func field_password(msg: str) -> fm.Field {
+    fm.field_password(msg)
+}
+
+/// One yes/no field for `form` (Enter toggles).
+pub func field_confirm(msg: str, def: bool) -> fm.Field {
+    fm.field_confirm(msg, def)
+}
+
+/// One cycling-choice field for `form` (Left/Right changes).
+pub func field_select(msg: str, options: [str]) -> fm.Field {
+    fm.field_select(msg, options)
+}
+
+/// One ranged-integer field for `form`.
+pub func field_number(msg: str, default: int, lo: int, hi: int) -> fm.Field {
+    fm.field_number(msg, default, lo, hi)
+}
+
+/// Multi-field form: Up/Down (or k/j) moves, typing edits text rows,
+/// Enter toggles confirm / advances, Left/Right cycles select,
+/// Tab advances, Enter on the last row or Ctrl+D submits, Esc
+/// cancels ([]). Answers come back as strings in field order
+/// (confirm yields "true"/"false").
+pub func form(title: str, fields: [fm.Field]) -> [str] {
+    fm.run(title, fields)
 }
 
 /// Fuzzy-filter select: type narrows the list, Up/Down (or k/j)

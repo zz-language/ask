@@ -1,0 +1,158 @@
+// theme.zz — visual themes for every prompt.
+//
+// No theme value is ever threaded through prompts: render helpers
+// read `current()` (env-driven) at draw time, so the public API keeps
+// its arities. `ASK_THEME` selects a preset ("default", "mono",
+// "ocean"); `NO_COLOR` (any value, even empty) forces mono.
+// `set_theme` switches mid-process via `env.set`.
+import std.colors
+import std.env
+
+/// Full visual language. `plain` skips all styling (dumb terminals,
+// logs); otherwise `answer`/`accent`/`error`/`faint` name colors
+// resolved by `paint`.
+pub struct Theme {
+    name: str,
+    plain: bool,
+    prefix: str,
+    marker: str,
+    box_on: str,
+    box_off: str,
+    answer: str,
+    accent: str,
+    error: str,
+    faint: str,
+}
+
+/// Classic look: `?` prompts, green answers, bold headers.
+pub func def() -> Theme {
+    Theme{
+        name: "default",
+        plain: false,
+        prefix: "? ",
+        marker: "> ",
+        box_on: "[x]",
+        box_off: "[ ]",
+        answer: "green",
+        accent: "green",
+        error: "red",
+        faint: "dim",
+    }
+}
+
+/// No colors at all: same layout, bare text.
+pub func mono() -> Theme {
+    Theme{
+        name: "mono",
+        plain: true,
+        prefix: "? ",
+        marker: "> ",
+        box_on: "[x]",
+        box_off: "[ ]",
+        answer: "",
+        accent: "",
+        error: "",
+        faint: "",
+    }
+}
+
+/// Cool look: cyan accents, yellow errors.
+pub func ocean() -> Theme {
+    Theme{
+        name: "ocean",
+        plain: false,
+        prefix: "~ ",
+        marker: "» ",
+        box_on: "[●]",
+        box_off: "[ ]",
+        answer: "cyan",
+        accent: "cyan",
+        error: "yellow",
+        faint: "dim",
+    }
+}
+
+/// Preset by name (unknown names fall back to default). Pure.
+pub func named(name: str) -> Theme {
+    if name == "mono" {
+        return mono()
+    }
+    if name == "ocean" {
+        return ocean()
+    }
+    def()
+}
+
+/// Available preset names. Pure.
+pub func names() -> [str] {
+    ["default", "mono", "ocean"]
+}
+
+/// One menu/header line: `<prefix><msg>` with the message bolded.
+pub func headline(t: Theme, msg: str) -> str {
+    t.prefix + paint(t, "bold", msg)
+}
+
+/// Paint `s` in a named color unless `t` is plain (pure).
+/// Known names: red green yellow blue magenta cyan white bold dim.
+/// Anything else passes through unchanged.
+pub func paint(t: Theme, color: str, s: str) -> str {
+    if t.plain {
+        return s
+    }
+    if color == "red" {
+        return colors.red(s)
+    }
+    if color == "green" {
+        return colors.green(s)
+    }
+    if color == "yellow" {
+        return colors.yellow(s)
+    }
+    if color == "blue" {
+        return colors.blue(s)
+    }
+    if color == "magenta" {
+        return colors.magenta(s)
+    }
+    if color == "cyan" {
+        return colors.cyan(s)
+    }
+    if color == "white" {
+        return colors.white(s)
+    }
+    if color == "bold" {
+        return colors.bold(s)
+    }
+    if color == "dim" {
+        return colors.dim(s)
+    }
+    s
+}
+
+/// Active theme: `ASK_THEME` preset, or mono when `NO_COLOR` is set
+/// (presence counts, even empty). Never fails.
+pub func current() -> Theme {
+    no_color := false
+    match env.get("NO_COLOR") {
+        .some(_) => {
+            no_color = true
+        }
+        .none => {
+            no_color = false
+        }
+    }
+    if no_color {
+        return mono()
+    }
+    named(env.get("ASK_THEME") ?? "")
+}
+
+/// Switch theme mid-process (`"default"`, `"mono"`, `"ocean"`).
+/// Returns false only when the environment rejects the key.
+pub func set_theme(name: str) -> bool {
+    match env.set("ASK_THEME", name) {
+        .ok(_) => true
+        .err(_) => false
+    }
+}
