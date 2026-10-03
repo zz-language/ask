@@ -37,3 +37,69 @@ func test_chomp_keeps_clean() {
     assert_eq(editor.chomp(""), "")
     assert_eq(editor.chomp("a\n\n"), "a\n")
 }
+
+@test
+func test_split_cmd_plain() {
+    got := editor.split_cmd("nvim file.txt")
+    assert_eq(len(got), 2)
+    assert_eq(got[0], "nvim")
+    assert_eq(got[1], "file.txt")
+}
+
+@test
+func test_split_cmd_squeezes_spaces() {
+    got := editor.split_cmd("  code   --wait  ")
+    assert_eq(len(got), 2)
+    assert_eq(got[0], "code")
+    assert_eq(got[1], "--wait")
+}
+
+@test
+func test_split_cmd_quoted() {
+    got := editor.split_cmd("\"/opt/my ed\" --wait")
+    assert_eq(len(got), 2)
+    assert_eq(got[0], "/opt/my ed")
+    assert_eq(got[1], "--wait")
+}
+
+@test
+func test_split_cmd_empty() {
+    assert_eq(len(editor.split_cmd("")), 0)
+    assert_eq(len(editor.split_cmd("   ")), 0)
+}
+
+@test
+func test_basename_paths() {
+    assert_eq(editor.basename("/usr/bin/code"), "code")
+    assert_eq(editor.basename("nvim"), "nvim")
+}
+
+@test
+func test_needs_wait_gui() {
+    assert(editor.needs_wait(["code", "f"]))
+    assert(editor.needs_wait(["/usr/bin/zed", "f"]))
+    assert(editor.needs_wait(["subl", "f"]))
+}
+
+@test
+func test_needs_wait_already_waiting() {
+    assert(editor.needs_wait(["code", "--wait", "f"]) == false)
+    assert(editor.needs_wait(["code", "-w", "f"]) == false)
+}
+
+@test
+func test_needs_wait_terminal() {
+    assert(editor.needs_wait(["nvim", "f"]) == false)
+    assert(editor.needs_wait(["vi"]) == false)
+    assert(editor.needs_wait([]) == false)
+}
+
+@test
+func test_default_cmd_platform() {
+    got := editor.default_cmd()
+    if editor.is_windows() {
+        assert_eq(got[0], "notepad")
+    } else {
+        assert_eq(got, ["vi"])
+    }
+}

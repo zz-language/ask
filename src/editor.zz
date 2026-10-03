@@ -26,7 +26,8 @@ pub func chomp(s: str) -> str {
     out
 }
 
-/// Editor binary: VISUAL, then EDITOR, then "vi" (pure).
+/// Editor binary: VISUAL, then EDITOR, then "vi".
+/// Prefer `editor_cmd` (flag-aware); kept for compatibility.
 pub func editor_bin() -> str {
     vis := env.get("VISUAL") ?? ""
     if vis != "" {
@@ -37,6 +38,108 @@ pub func editor_bin() -> str {
         return ed
     }
     "vi"
+}
+
+/// Raw editor command line: VISUAL, then EDITOR, else "".
+/// May contain flags (`code --wait`) — split with `split_cmd`.
+pub func raw_env() -> str {
+    vis := env.get("VISUAL") ?? ""
+    if vis != "" {
+        return vis
+    }
+    env.get("EDITOR") ?? ""
+}
+
+/// Split a command line on whitespace, honoring double-quoted groups
+/// (`"/opt/my ed" --wait` → two parts). Pure.
+pub func split_cmd(s: str) -> [str] {
+    out: [str] = []
+    cur := ""
+    quoted := false
+    chars := str.split(s, "")
+    for c in chars {
+        if c == "" {
+            continue
+        }
+        if c == "\"" {
+            if quoted {
+                quoted = false
+            } else {
+                quoted = true
+            }
+        } else if c == " " && quoted == false {
+            if cur != "" {
+                out = vec.push(out, cur)
+                cur = ""
+            }
+        } else {
+            cur = cur + c
+        }
+    }
+    if cur != "" {
+        out = vec.push(out, cur)
+    }
+    out
+}
+
+/// Basename of a program path (`/usr/bin/code` → `code`). Pure.
+pub func basename(p: str) -> str {
+    parts := str.split(p, "/")
+    parts[vec.len(parts) - 1]
+}
+
+/// GUI editors that fork to the background unless asked to wait.
+func gui_list() -> [str] {
+    ["code", "code-insiders", "vscode", "code-oss", "zed", "subl", "sublime_text", "atom", "cursor"]
+}
+
+/// True when `argv` names a GUI editor without a wait flag already
+/// present (`--wait` / `-w`). Pure.
+pub func needs_wait(argv: [str]) -> bool {
+    if vec.len(argv) == 0 {
+        return false
+    }
+    name := basename(argv[0])
+    gui := false
+    for g in gui_list() {
+        if name == g {
+            gui = true
+        }
+    }
+    if gui == false {
+        return false
+    }
+    for a in argv {
+        if a == "--wait" || a == "-w" {
+            return false
+        }
+    }
+    true
+}
+
+/// Fallback command when no env editor is set (OS-dependent only).
+pub func default_cmd() -> [str] {
+    if is_windows() {
+        return ["notepad"]
+    }
+    ["vi"]
+}
+
+/// Full editor argv prefix: env command split into words, `--wait`
+/// appended for GUI editors missing it, platform default when unset.
+pub func editor_cmd() -> [str] {
+    raw := raw_env()
+    base := default_cmd()
+    if raw != "" {
+        base = split_cmd(raw)
+    }
+    if vec.len(base) == 0 {
+        base = default_cmd()
+    }
+    if needs_wait(base) {
+        base = vec.push(base, "--wait")
+    }
+    base
 }
 
 /// True on Windows (editor launches without /dev/tty there).
@@ -52,17 +155,38 @@ pub func is_windows() -> bool {
 /// standard fds to /dev/tty (the positional params dodge every
 /// quoting problem, even spaces in $TMPDIR). Windows has no
 /// /dev/tty — GUI editors don't need a console, so run direct.
-pub func edit_argv(bin: str, path: str) -> [str] {
+/// Wrap editor argv so the child owns the real terminal (shared by
+/// the explicit-binary and env-command paths — see `edit_argv`).
+func sh_wrap(argv: [str]) -> [str] {
     if is_windows() {
-        return [bin, path]
+        return argv
     }
-    ["sh", "-c", "exec \"$@\" </dev/tty >/dev/tty 2>&1", "ask", bin, path]
+    head: [str] = ["sh", "-c", "exec \"$@\" </dev/tty >/dev/tty 2>&1", "ask"]
+    for a in argv {
+        head = vec.push(head, a)
+    }
+    head
+}
+
+pub func edit_argv(bin: str, path: str) -> [str] {
+    sh_wrap([bin, path])
 }
 
 /// Run the editor on `path`: true when it exits zero.
 pub func edit_file(path: str, bin: str) -> bool {
     argv := edit_argv(bin, path)
     match process.run(argv[0], argv[1:]) {
+        .ok(t) => t[0] == 0
+        .err(_) => false
+    }
+}
+
+/// Run the resolved editor command (`editor_cmd`) on `path`.
+func edit_resolved(path: str) -> bool {
+    cmd := editor_cmd()
+    full := sh_wrap(cmd)
+    full = vec.push(full, path)
+    match process.run(full[0], full[1:]) {
         .ok(t) => t[0] == 0
         .err(_) => false
     }
@@ -80,8 +204,8 @@ pub func editor_ext(msg: str, default: str, ext: str) -> str {
     if term.is_tty() == false {
         return fallback.edit_lines(msg, default)
     }
-    bin := editor_bin()
-    println("? {msg} (opening {bin}...)")
+    cmd := editor_cmd()
+    println("? {msg} (opening {vec.join(cmd, " ")}...)")
     path := env.temp_dir() + "/ask-" + uuid.v7() + "." + ext
     match fs.write_file(path, default) {
         .ok(_) => 0
@@ -89,7 +213,7 @@ pub func editor_ext(msg: str, default: str, ext: str) -> str {
             return default
         }
     }
-    ok := edit_file(path, bin)
+    ok := edit_resolved(path)
     content := default
     readback := match fs.read_file(path) {
         .ok(c) => c
@@ -102,7 +226,11 @@ pub func editor_ext(msg: str, default: str, ext: str) -> str {
         .ok(_) => 0
         .err(_) => 0
     }
-    n := vec.len(str.split(content, "\n"))
-    ansi.answer(msg, "(edited, {n} lines)")
+    if ok {
+        n := vec.len(str.split(content, "\n"))
+        ansi.answer(msg, "(edited, {n} lines)")
+    } else {
+        ansi.answer(msg, "(editor failed, kept default)")
+    }
     content
 }

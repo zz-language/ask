@@ -37,7 +37,7 @@ feats := ask.multi_select("Features:", ["logs", "cache", "tls"])
 | `ask.text_path(msg, default)` | Line editing plus Tab path completion (bell when ambiguous, `/` drill-down for dirs). |
 | `ask.number(msg, default, lo, hi)` | Ranged integer input (`Age [1-120]: `); garbage/out-of-range re-asks. |
 | `ask.multi_select(msg, options)` | Space toggles `[x]`/`[ ]`, Enter confirms. Returns `[str]`. |
-| `ask.editor(msg, default)` / `ask.editor_ext(msg, default, ext)` | Opens `$EDITOR` on a tempfile (scratch `ext` for highlighting); returns saved contents. Aborts keep default. |
+| `ask.editor(msg, default)` / `ask.editor_ext(msg, default, ext)` | Opens the editor on a tempfile (scratch `ext` for highlighting); returns saved contents. `VISUAL`/`EDITOR` may carry flags (quoted groups ok); GUI editors (`code`, `zed`, `subl`, …) gain `--wait` automatically; falls back to `vi`/`notepad`. TUI editors get the real terminal. Failed/aborted edits honestly report `(editor failed, kept default)` and keep the default. |
 | `ask.confirm_danger(msg, word)` / `ask.confirm_delete(msg)` | Must type `word` exactly (`DELETE`); anything else aborts `false`. |
 | `ask.area(msg, default, rows)` | Multi-line area: arrows, Enter splits, Tab indents, Ctrl+D accepts, Esc cancels. Scrolling window, soft wrap. |
 
